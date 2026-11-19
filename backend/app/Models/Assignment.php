@@ -57,4 +57,11 @@ class Assignment extends Model
     {
         return now()->isAfter($this->due_date);
     }
+
+    public function canBeGradedBy(User $user): bool
+    {
+        return $this->course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('assignments.grade') && ! $user->hasRole(Role::TEACHER));
+    }
 }

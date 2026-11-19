@@ -16,7 +16,7 @@ class GradeSubmissionRequest extends FormRequest
             return false;
         }
 
-        return $course->isTaughtBy($user) || $user->hasPermission('assignments.grade') || $user->isSuperAdmin();
+        return $submission->assignment->canBeGradedBy($user);
     }
 
     public function rules(): array

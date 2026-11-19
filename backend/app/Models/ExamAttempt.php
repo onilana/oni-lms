@@ -80,7 +80,14 @@ class ExamAttempt extends Model
     {
         DB::transaction(function () use ($submittedAnswers): void {
             $attempt = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
-            if (! $attempt || $attempt->status === 'evaluated') {
+            if (
+                ! $attempt
+                || $attempt->status === 'evaluated'
+                || (
+                    $attempt->status !== 'in_progress'
+                    && ($attempt->score !== null || $attempt->percentage !== null || $attempt->is_passed !== null)
+                )
+            ) {
                 return;
             }
 

@@ -7,8 +7,11 @@ use App\Http\Requests\Assignment\SubmitAssignmentRequest;
 use App\Http\Resources\Assignment\AssignmentSubmissionResource;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
+use App\Models\AssignmentSubmissionUpload;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Validation\ValidationException;
 
 class AssignmentSubmissionController
 {
@@ -16,8 +19,7 @@ class AssignmentSubmissionController
     {
         $user = $request->user();
 
-        // Enforce instructor/admin access
-        if (! $assignment->course->isTaughtBy($user) && ! $user->isSuperAdmin() && ! $user->hasPermission('assignments.grade')) {
+        if (! $assignment->canBeGradedBy($user)) {
             return response()->json(['message' => 'Forbidden: You do not have permission to review submissions.'], 403);
         }
 
@@ -59,6 +61,21 @@ class AssignmentSubmissionController
         }
 
         $validated = $request->validated();
+        $upload = null;
+        if (! empty($validated['attachment_path'])) {
+            $upload = AssignmentSubmissionUpload::query()
+                ->whereKey($validated['attachment_path'])
+                ->where('assignment_id', $assignment->id)
+                ->where('user_id', $user->id)
+                ->firstOrFail();
+
+            if (! Storage::disk('local')->exists($upload->storage_path)) {
+                throw ValidationException::withMessages([
+                    'attachment_path' => 'The uploaded file is no longer available.',
+                ]);
+            }
+        }
+
         $isLate = $assignment->isPastDue();
 
         $submission = AssignmentSubmission::updateOrCreate([
@@ -66,8 +83,8 @@ class AssignmentSubmissionController
             'user_id' => $user->id,
         ], [
             'submission_text' => $validated['submission_text'] ?? null,
-            'attachment_path' => $validated['attachment_path'] ?? null,
-            'attachment_name' => $validated['attachment_name'] ?? null,
+            'attachment_path' => $upload?->storage_path,
+            'attachment_name' => $upload?->original_name,
             'submitted_at' => now(),
             'status' => 'submitted',
             'is_late' => $isLate,

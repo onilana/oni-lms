@@ -15,7 +15,9 @@ class AssignmentSubmissionResource extends JsonResource
             'assignment_id' => $this->assignment_id,
             'user' => new UserResource($this->whenLoaded('user')),
             'submission_text' => $this->submission_text,
-            'attachment_path' => $this->attachment_path,
+            'attachment_path' => $this->attachment_path
+                ? route('api.v1.submissions.attachment', ['submission' => $this->id])
+                : null,
             'attachment_name' => $this->attachment_name,
             'submitted_at' => $this->submitted_at?->toIso8601String(),
             'status' => $this->status,

@@ -5,6 +5,7 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  Download,
   FileCheck,
   FileEdit,
   GraduationCap,
@@ -12,13 +13,20 @@ import {
   Plus,
   RefreshCw,
   Send,
+  Upload,
   UserCheck,
   X
 } from 'lucide-react';
-import { apiRequest, ApiError } from '../api/client';
+import { apiDownload, apiRequest, ApiError } from '../api/client';
 import type { Assignment, AssignmentSubmission } from '../types/assignment';
 import type { Course } from '../types/course';
 import { useAuth } from '../context/AuthContext';
+
+interface UploadedAssignmentAttachment {
+  attachment_reference: string;
+  attachment_path: string;
+  attachment_name: string;
+}
 
 export const AssignmentsView: React.FC = () => {
   const { user, hasRole, hasPermission } = useAuth();
@@ -33,7 +41,11 @@ export const AssignmentsView: React.FC = () => {
   // Student submission modal
   const [submittingAssignment, setSubmittingAssignment] = useState<Assignment | null>(null);
   const [submissionText, setSubmissionText] = useState('');
-  const [submissionAttachment, setSubmissionAttachment] = useState('');
+  const [submissionFile, setSubmissionFile] = useState<File | null>(null);
+  const [uploadedAttachment, setUploadedAttachment] = useState<UploadedAssignmentAttachment | null>(null);
+  const [uploadingAttachment, setUploadingAttachment] = useState(false);
+  const [attachmentUploadError, setAttachmentUploadError] = useState<string | null>(null);
+  const [submittingResponse, setSubmittingResponse] = useState(false);
 
   // Teacher grading modal
   const [gradingAssignment, setGradingAssignment] = useState<Assignment | null>(null);
@@ -58,6 +70,8 @@ export const AssignmentsView: React.FC = () => {
   const assignmentLoadIdRef = useRef(0);
   const gradingSessionIdRef = useRef(0);
   const gradingAssignmentIdRef = useRef<string | null>(null);
+  const submissionAttachmentUploadIdRef = useRef(0);
+  const submissionAssignmentIdRef = useRef<string | null>(null);
 
   const fetchAssignments = async (courseId = selectedCourseId) => {
     const requestId = ++assignmentLoadIdRef.current;
@@ -105,28 +119,130 @@ export const AssignmentsView: React.FC = () => {
   }, [selectedCourseId]);
 
   const handleOpenSubmit = (assignment: Assignment) => {
+    submissionAttachmentUploadIdRef.current += 1;
+    submissionAssignmentIdRef.current = assignment.id;
     setSubmittingAssignment(assignment);
     setSubmissionText(assignment.my_submission?.submission_text ?? '');
-    setSubmissionAttachment(assignment.my_submission?.attachment_name ?? '');
+    setSubmissionFile(null);
+    setUploadedAttachment(null);
+    setUploadingAttachment(false);
+    setAttachmentUploadError(null);
+    setSubmittingResponse(false);
+  };
+
+  const closeSubmit = () => {
+    submissionAttachmentUploadIdRef.current += 1;
+    submissionAssignmentIdRef.current = null;
+    setSubmittingAssignment(null);
+    setSubmissionText('');
+    setSubmissionFile(null);
+    setUploadedAttachment(null);
+    setUploadingAttachment(false);
+    setAttachmentUploadError(null);
+    setSubmittingResponse(false);
+  };
+
+  const handleSubmissionFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.currentTarget.files?.[0];
+    e.currentTarget.value = '';
+    if (!file || !submittingAssignment) return;
+
+    const assignmentId = submittingAssignment.id;
+    const uploadId = ++submissionAttachmentUploadIdRef.current;
+    setSubmissionFile(file);
+    setUploadedAttachment(null);
+    setAttachmentUploadError(null);
+    setUploadingAttachment(true);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const attachment = await apiRequest<UploadedAssignmentAttachment>(
+        `/assignments/${assignmentId}/attachments`,
+        { method: 'POST', body: formData }
+      );
+      if (
+        uploadId === submissionAttachmentUploadIdRef.current &&
+        submissionAssignmentIdRef.current === assignmentId
+      ) {
+        setUploadedAttachment(attachment);
+      }
+    } catch (err) {
+      if (
+        uploadId === submissionAttachmentUploadIdRef.current &&
+        submissionAssignmentIdRef.current === assignmentId
+      ) {
+        setAttachmentUploadError(err instanceof Error ? err.message : 'Error uploading attachment');
+      }
+    } finally {
+      if (
+        uploadId === submissionAttachmentUploadIdRef.current &&
+        submissionAssignmentIdRef.current === assignmentId
+      ) {
+        setUploadingAttachment(false);
+      }
+    }
   };
 
   const handleSubmitAssignment = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!submittingAssignment) return;
+    if (!submittingAssignment || uploadingAttachment || submittingResponse) return;
+
+    const assignment = submittingAssignment;
+    const hasText = submissionText.trim().length > 0;
+    const hasAttachment = !!uploadedAttachment;
+    if (assignment.submission_type === 'text' && !hasText) {
+      alert('Enter a text response before submitting.');
+      return;
+    }
+    if (assignment.submission_type === 'file' && !hasAttachment) {
+      alert('Upload a file before submitting.');
+      return;
+    }
+    if (assignment.submission_type === 'both' && !hasText && !hasAttachment) {
+      alert('Enter a text response or upload a file before submitting.');
+      return;
+    }
 
     try {
-      await apiRequest(`/assignments/${submittingAssignment.id}/submit`, {
+      setSubmittingResponse(true);
+      const payload: {
+        submission_text?: string;
+        attachment_path?: string;
+        attachment_name?: string;
+      } = {};
+      if (assignment.submission_type !== 'file' && hasText) {
+        payload.submission_text = submissionText;
+      }
+      if (assignment.submission_type !== 'text' && uploadedAttachment) {
+        payload.attachment_path = uploadedAttachment.attachment_reference;
+        payload.attachment_name = uploadedAttachment.attachment_name;
+      }
+
+      await apiRequest(`/assignments/${assignment.id}/submit`, {
         method: 'POST',
-        body: JSON.stringify({
-          submission_text: submissionText,
-          attachment_name: submissionAttachment || undefined,
-        }),
+        body: JSON.stringify(payload),
       });
 
-      setSubmittingAssignment(null);
+      closeSubmit();
       await fetchAssignments();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error submitting assignment');
+    } finally {
+      setSubmittingResponse(false);
+    }
+  };
+
+  const handleDownloadAttachment = async (submission: AssignmentSubmission) => {
+    if (!submission.attachment_path) return;
+    try {
+      await apiDownload(
+        submission.attachment_path,
+        submission.attachment_name ?? 'assignment-attachment'
+      );
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error downloading attachment');
     }
   };
 
@@ -371,7 +487,7 @@ export const AssignmentsView: React.FC = () => {
 
       {/* Student Submit Modal */}
       {submittingAssignment && (
-        <div className="modal-backdrop" onClick={() => setSubmittingAssignment(null)}>
+        <div className="modal-backdrop" onClick={closeSubmit}>
           <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -379,7 +495,7 @@ export const AssignmentsView: React.FC = () => {
                 <h3>{submittingAssignment.title}</h3>
                 <small>Due: {new Date(submittingAssignment.due_date).toLocaleString()}</small>
               </div>
-              <button className="btn-close" onClick={() => setSubmittingAssignment(null)}><X size={18} /></button>
+              <button className="btn-close" onClick={closeSubmit}><X size={18} /></button>
             </div>
 
             <form onSubmit={handleSubmitAssignment} className="modal-form">
@@ -390,29 +506,50 @@ export const AssignmentsView: React.FC = () => {
                 </div>
               )}
 
-              <div className="form-group">
-                <label>Text Response / Solution Notes</label>
-                <textarea
-                  rows={6}
-                  required={submittingAssignment.submission_type === 'text' || submittingAssignment.submission_type === 'both'}
-                  placeholder="Paste your implementation source code, written explanation, or repository URL..."
-                  value={submissionText}
-                  onChange={(e) => setSubmissionText(e.target.value)}
-                />
-              </div>
+              {submittingAssignment.submission_type !== 'file' && (
+                <div className="form-group">
+                  <label>
+                    Text Response / Solution Notes
+                    {submittingAssignment.submission_type === 'both' ? ' (Optional when attaching a file)' : ''}
+                  </label>
+                  <textarea
+                    rows={6}
+                    required={submittingAssignment.submission_type === 'text'}
+                    placeholder="Paste your implementation source code, written explanation, or repository URL..."
+                    value={submissionText}
+                    onChange={(e) => setSubmissionText(e.target.value)}
+                  />
+                </div>
+              )}
 
-              <div className="form-group">
-                <label>Attachment File / Document Name (Optional)</label>
-                <input
-                  placeholder="e.g. Solution-Archive.zip or Report.pdf"
-                  value={submissionAttachment}
-                  onChange={(e) => setSubmissionAttachment(e.target.value)}
-                />
-              </div>
+              {submittingAssignment.submission_type !== 'text' && (
+                <div className="form-group">
+                  <label htmlFor="assignment-submission-file">
+                    Attachment File{submittingAssignment.submission_type === 'file' ? ' (Required)' : ' (Optional when text is provided)'}
+                  </label>
+                  <input
+                    id="assignment-submission-file"
+                    type="file"
+                    aria-required={submittingAssignment.submission_type === 'file'}
+                    onChange={handleSubmissionFileChange}
+                    disabled={uploadingAttachment || submittingResponse}
+                  />
+                  {submissionFile && (
+                    <small>
+                      {submissionFile.name}
+                      {uploadingAttachment ? ' · Uploading…' : uploadedAttachment ? ' · Uploaded' : ''}
+                    </small>
+                  )}
+                  {submittingAssignment.my_submission?.attachment_name && !submissionFile && (
+                    <small>Previously submitted: {submittingAssignment.my_submission.attachment_name}</small>
+                  )}
+                  {attachmentUploadError && <div className="alert alert-error">{attachmentUploadError}</div>}
+                </div>
+              )}
 
-              <button type="submit" className="btn btn-primary btn-block">
+              <button type="submit" className="btn btn-primary btn-block" disabled={uploadingAttachment || submittingResponse}>
                 <Send size={16} />
-                <span>Confirm & Submit Assignment</span>
+                <span>{submittingResponse ? 'Submitting…' : 'Confirm & Submit Assignment'}</span>
               </button>
             </form>
           </div>
@@ -450,14 +587,14 @@ export const AssignmentsView: React.FC = () => {
                     <div className="submission-content-box">
                       <pre>{activeSubmissionToGrade.submission_text || 'No text provided.'}</pre>
                       {activeSubmissionToGrade.attachment_path && (
-                        <a
-                          href={activeSubmissionToGrade.attachment_path}
-                          target="_blank"
-                          rel="noreferrer"
-                          download={activeSubmissionToGrade.attachment_name ?? undefined}
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          onClick={() => handleDownloadAttachment(activeSubmissionToGrade)}
                         >
-                          {activeSubmissionToGrade.attachment_name ?? 'Open attachment'}
-                        </a>
+                          <Download size={14} />
+                          {activeSubmissionToGrade.attachment_name ?? 'Download attachment'}
+                        </button>
                       )}
                     </div>
                   </div>

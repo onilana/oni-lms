@@ -511,9 +511,11 @@ class ExamTest extends TestCase
             ->assertJsonPath('data.is_passed', true);
 
         // Assert idempotent re-submission returns 200 without double grading
+        $q1->update(['correct_answers' => ['rome']]);
         $resubmit = $this->actingAs($this->student)
             ->postJson("/api/v1/attempts/{$attemptId}/submit", []);
-        $resubmit->assertStatus(200);
+        $resubmit->assertStatus(200)
+            ->assertJsonPath('data.score', 4);
     }
 
     public function test_submission_merges_saved_answers_and_uses_start_time_grading_snapshot(): void

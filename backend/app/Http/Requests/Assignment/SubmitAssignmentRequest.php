@@ -3,6 +3,8 @@
 namespace App\Http\Requests\Assignment;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class SubmitAssignmentRequest extends FormRequest
 {
@@ -15,7 +17,7 @@ class SubmitAssignmentRequest extends FormRequest
             return false;
         }
 
-        // Student must be enrolled in the course or admin
+        // Student must be enrolled in the course or a super-admin.
         return $assignment->course->hasStudent($user) || $user->isSuperAdmin();
     }
 
@@ -23,6 +25,9 @@ class SubmitAssignmentRequest extends FormRequest
     {
         $assignment = $this->route('assignment');
         $submissionType = $assignment?->submission_type;
+        $referenceExists = Rule::exists('assignment_submission_uploads', 'id')
+            ->where('assignment_id', $assignment?->id)
+            ->where('user_id', $this->user()?->id);
 
         return [
             'submission_text' => match ($submissionType) {
@@ -32,12 +37,24 @@ class SubmitAssignmentRequest extends FormRequest
             },
             'attachment_path' => match ($submissionType) {
                 'text' => ['prohibited'],
-                'file' => ['required', 'string', 'max:500'],
-                default => ['nullable', 'string', 'max:500', 'required_without:submission_text'],
+                'file' => ['required', 'uuid', $referenceExists],
+                default => ['nullable', 'uuid', $referenceExists, 'required_without:submission_text'],
             },
             'attachment_name' => $submissionType === 'text'
                 ? ['prohibited']
                 : ['nullable', 'string', 'max:255'],
         ];
+    }
+
+    public function withValidator(Validator $validator): void
+    {
+        $validator->after(function (Validator $validator): void {
+            if ($this->filled('attachment_name') && ! $this->filled('attachment_path')) {
+                $validator->errors()->add(
+                    'attachment_path',
+                    'Upload the attachment and provide its returned reference.'
+                );
+            }
+        });
     }
 }

@@ -13,14 +13,16 @@ export async function apiRequest<T>(
 ): Promise<T> {
   const token = localStorage.getItem('oni_lms_token');
 
-  const headers: Record<string, string> = {
-    'Accept': 'application/json',
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> ?? {}),
-  };
+  const headers = new Headers(options.headers);
+  headers.set('Accept', 'application/json');
+  if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
+    headers.delete('Content-Type');
+  } else if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
@@ -38,4 +40,33 @@ export async function apiRequest<T>(
   }
 
   return data as T;
+}
+
+export async function apiDownload(endpoint: string, filename: string): Promise<void> {
+  const token = localStorage.getItem('oni_lms_token');
+  const headers = new Headers({ Accept: 'application/octet-stream' });
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
+  const response = await fetch(url, { headers });
+  if (!response.ok) {
+    const data = await response.json().catch(() => null);
+    throw new ApiError(
+      response.status,
+      data?.message ?? `Request failed with status ${response.status}`,
+      data?.errors
+    );
+  }
+
+  const blobUrl = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = blobUrl;
+  link.download = filename.replace(/[\\/:*?"<>|]/g, '_') || 'attachment';
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
 }

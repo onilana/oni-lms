@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Academic\BatchController;
 use App\Http\Controllers\Api\V1\Academic\DepartmentController;
 use App\Http\Controllers\Api\V1\Academic\ProgrammeController;
 use App\Http\Controllers\Api\V1\Academic\SemesterController;
+use App\Http\Controllers\Api\V1\Assignment\AssignmentAttachmentController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentSubmissionController;
 use App\Http\Controllers\Api\V1\AuthController;
@@ -145,9 +146,12 @@ Route::prefix('v1')->group(function (): void {
 
             Route::get('/{assignment}/submissions', [AssignmentSubmissionController::class, 'index']);
             Route::get('/{assignment}/my-submission', [AssignmentSubmissionController::class, 'mySubmission']);
+            Route::post('/{assignment}/attachments', [AssignmentAttachmentController::class, 'store']);
             Route::post('/{assignment}/submit', [AssignmentSubmissionController::class, 'submit']);
         });
 
+        Route::get('/submissions/{submission}/attachment', [AssignmentAttachmentController::class, 'download'])
+            ->name('api.v1.submissions.attachment');
         Route::post('/submissions/{submission}/grade', [AssignmentSubmissionController::class, 'grade']);
 
         // Examinations & Question Bank (Epic 7)

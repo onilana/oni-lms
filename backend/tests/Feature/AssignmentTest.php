@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AcademicSession;
 use App\Models\Assignment;
 use App\Models\AssignmentSubmission;
+use App\Models\AssignmentSubmissionUpload;
 use App\Models\Course;
 use App\Models\CourseEnrolment;
 use App\Models\CourseInstructor;
@@ -17,6 +18,8 @@ use Database\Seeders\CourseSeeder;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
 
 class AssignmentTest extends TestCase
@@ -263,7 +266,6 @@ class AssignmentTest extends TestCase
         $response = $this->withHeader('Authorization', 'Bearer '.$this->enrolledToken)
             ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
                 'submission_text' => 'https://github.com/knuth/cs101-linked-list.git',
-                'attachment_name' => 'solution.zip',
             ]);
 
         $response->assertStatus(201)
@@ -274,6 +276,143 @@ class AssignmentTest extends TestCase
             'assignment_id' => $assignment->id,
             'user_id' => $this->enrolledStudent->id,
         ]);
+    }
+
+    public function test_private_assignment_attachment_upload_submission_and_download_access(): void
+    {
+        Storage::fake('local');
+        $assignment = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'File-or-text assignment',
+            'due_date' => now()->addDay(),
+            'submission_type' => 'both',
+            'status' => 'published',
+        ]);
+
+        $uploadResponse = $this->actingAs($this->enrolledStudent)
+            ->post('/api/v1/assignments/'.$assignment->id.'/attachments', [
+                'file' => UploadedFile::fake()->createWithContent('solution.pdf', 'private assignment data'),
+            ]);
+
+        $uploadResponse->assertCreated()
+            ->assertJsonPath('attachment_name', 'solution.pdf');
+        $reference = $uploadResponse->json('attachment_reference');
+        $upload = AssignmentSubmissionUpload::findOrFail($reference);
+        Storage::disk('local')->assertExists($upload->storage_path);
+
+        $anotherStudent = User::factory()->create();
+        $anotherStudent->roles()->attach(Role::where('name', Role::STUDENT)->value('id'));
+        CourseEnrolment::create([
+            'course_id' => $this->course->id,
+            'user_id' => $anotherStudent->id,
+            'academic_session_id' => AcademicSession::where('is_current', true)->value('id'),
+            'status' => 'enrolled',
+        ]);
+        $this->actingAs($anotherStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
+                'attachment_path' => $reference,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['attachment_path']);
+
+        $submissionResponse = $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
+                'attachment_path' => $reference,
+                'attachment_name' => 'spoofed-name.txt',
+            ]);
+
+        $submissionResponse->assertCreated()
+            ->assertJsonPath('submission.attachment_name', 'solution.pdf')
+            ->assertJsonPath(
+                'submission.attachment_path',
+                route('api.v1.submissions.attachment', ['submission' => $submissionResponse->json('submission.id')])
+            );
+
+        $submission = AssignmentSubmission::findOrFail($submissionResponse->json('submission.id'));
+        $this->assertSame($upload->storage_path, $submission->attachment_path);
+        $this->assertStringNotContainsString($upload->storage_path, json_encode($submissionResponse->json()));
+
+        $downloadResponse = $this->actingAs($this->enrolledStudent)
+            ->get('/api/v1/submissions/'.$submission->id.'/attachment')
+            ->assertOk()
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+        $this->assertSame('private assignment data', $downloadResponse->streamedContent());
+
+        $this->actingAs($this->teacher)
+            ->get('/api/v1/submissions/'.$submission->id.'/attachment')
+            ->assertOk();
+
+        $this->actingAs($this->nonEnrolledStudent)
+            ->get('/api/v1/submissions/'.$submission->id.'/attachment')
+            ->assertForbidden();
+
+        $unrelatedTeacher = User::factory()->create();
+        $unrelatedTeacher->roles()->attach(Role::where('name', Role::TEACHER)->value('id'));
+        $this->actingAs($unrelatedTeacher)
+            ->get('/api/v1/submissions/'.$submission->id.'/attachment')
+            ->assertForbidden();
+    }
+
+    public function test_uploads_require_eligible_assignment_and_submission_references(): void
+    {
+        Storage::fake('local');
+        $fileAssignment = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'File-only assignment',
+            'due_date' => now()->addDay(),
+            'submission_type' => 'file',
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($this->enrolledStudent)
+            ->post('/api/v1/assignments/'.$fileAssignment->id.'/attachments', [
+                'file' => UploadedFile::fake()->create('file-only.pdf', 10),
+            ])
+            ->assertCreated();
+
+        $this->actingAs($this->nonEnrolledStudent)
+            ->post('/api/v1/assignments/'.$fileAssignment->id.'/attachments', [
+                'file' => UploadedFile::fake()->create('solution.pdf', 10),
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$fileAssignment->id.'/submit', [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['attachment_path']);
+
+        $textAssignment = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'Text-only assignment',
+            'due_date' => now()->addDay(),
+            'submission_type' => 'text',
+            'status' => 'published',
+        ]);
+        $this->actingAs($this->enrolledStudent)
+            ->post('/api/v1/assignments/'.$textAssignment->id.'/attachments', [
+                'file' => UploadedFile::fake()->create('solution.pdf', 10),
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$fileAssignment->id.'/submit', [
+                'attachment_path' => 'assignment-submissions/../../arbitrary.pdf',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['attachment_path']);
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$fileAssignment->id.'/submit', [
+                'attachment_name' => 'name-only.pdf',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['attachment_path']);
+
+        $this->actingAs($this->admin)
+            ->post('/api/v1/assignments/'.$fileAssignment->id.'/attachments', [
+                'file' => UploadedFile::fake()->create('admin-solution.pdf', 10),
+            ])
+            ->assertCreated();
     }
 
     public function test_resubmitting_clears_previous_grade(): void
