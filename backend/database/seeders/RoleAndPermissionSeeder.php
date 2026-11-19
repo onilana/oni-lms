@@ -149,5 +149,20 @@ class RoleAndPermissionSeeder extends Seeder
         if (! $superAdmin->hasRole(Role::SUPER_ADMIN)) {
             $superAdmin->roles()->attach($roles[Role::SUPER_ADMIN]->id);
         }
+
+        // 5. Default Demo Student User
+        $demoStudent = User::firstOrCreate(
+            ['email' => 'student@onilms.edu'],
+            [
+                'name' => 'Aarav Sharma',
+                'password' => Hash::make(env('INITIAL_STUDENT_PASSWORD', 'OniStudent@2026!')),
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        if (! $demoStudent->hasRole(Role::STUDENT)) {
+            $demoStudent->roles()->attach($roles[Role::STUDENT]->id);
+        }
     }
 }

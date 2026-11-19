@@ -20,6 +20,7 @@ import { CoursesView } from './components/CoursesView';
 import { LessonPlayerView } from './components/LessonPlayerView';
 import { AssignmentsView } from './components/AssignmentsView';
 import { ExamsView } from './components/ExamsView';
+import { StudentDashboardView } from './components/StudentDashboardView';
 import { apiRequest } from './api/client';
 import type { HealthStatus } from './types/auth';
 
@@ -195,154 +196,46 @@ function MainApp() {
             {currentView === 'assignments' && <AssignmentsView />}
             {currentView === 'exams' && <ExamsView />}
             {currentView === 'dashboard' && (
-          <>
-            <section className="welcome">
-              <div>
-                <span className="eyebrow light">
-                  {user ? `WELCOME BACK, ${user.name.toUpperCase()}` : 'WELCOME TO ONI LEARNING SPACE'}
-                </span>
-                <h2>{user ? `Ready for your academic day?` : 'Build. Learn. Achieve.'}</h2>
-                <p>
-                  {user
-                    ? `Logged in with verified role: ${user.roles.map((r) => r.label).join(', ')}.`
-                    : 'A clean, modular LMS foundation built with Laravel 12 & React TypeScript.'}
-                </p>
-              </div>
-              <GraduationCap className="welcome-icon" size={76} strokeWidth={1.2} />
-            </section>
+              <>
+                <StudentDashboardView
+                  onOpenCourse={(cId) => setLearningCourseId(cId)}
+                  onNavigateTo={(view) => {
+                    setCurrentView(view);
+                    setLearningCourseId(null);
+                  }}
+                  onOpenLogin={() => setIsLoginOpen(true)}
+                />
 
-            {user && (
-              <section className="role-banner">
-                <ShieldCheck size={20} className="role-banner-icon" />
-                <div className="role-banner-content">
-                  <strong>Active Session Permissions:</strong>
-                  <div className="permissions-pills">
-                    {user.permissions.includes('*') ? (
-                      <span className="perm-chip all">Full System Access (Super Admin)</span>
-                    ) : (
-                      user.permissions.map((p) => (
-                        <span key={p} className="perm-chip">
-                          {p}
-                        </span>
-                      ))
-                    )}
+                {/* System & Architecture Status Panel (Staff & Verification) */}
+                <section className="panel" style={{ marginTop: '36px' }}>
+                  <div className="panel-heading">
+                    <div>
+                      <h3>System & API Infrastructure</h3>
+                      <p>Real-time health indicator for backend, database, and cache</p>
+                    </div>
+                    <span className={`status ${health?.success ? 'ok' : 'pending'}`}>
+                      {health?.success ? 'Connected' : 'Checking'}
+                    </span>
                   </div>
-                </div>
-              </section>
+
+                  {healthError && (
+                    <p className="error">
+                      API connection unavailable: {healthError}. Verify local development services.
+                    </p>
+                  )}
+
+                  <div className="health-grid">
+                    {['application', 'database', 'redis'].map((name) => (
+                      <div className="health-item" key={name}>
+                        <span className={`dot ${health?.checks?.[name] === 'ok' ? 'green' : ''}`} />
+                        <span>{name}</span>
+                        <b>{health?.checks?.[name] ?? 'Pending'}</b>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
             )}
-
-            <section className="stats">
-              <article
-                className="stat-card clickable"
-                onClick={() => setCurrentView('courses')}
-                title="View Courses"
-              >
-                <span className="stat-icon">
-                  <BookOpen size={20} />
-                </span>
-                <small>COURSE CATALOGUE</small>
-                <strong>Operational</strong>
-                <p>Browse & enroll in courses →</p>
-              </article>
-              <article
-                className="stat-card clickable"
-                onClick={() => setCurrentView('academic')}
-                title="View Academic Setup"
-              >
-                <span className="stat-icon">
-                  <Building2 size={20} />
-                </span>
-                <small>ACADEMIC STRUCTURE</small>
-                <strong>Operational</strong>
-                <p>Departments, Degrees & Cohorts →</p>
-              </article>
-              <article
-                className="stat-card clickable"
-                onClick={() => setCurrentView('assignments')}
-                title="View Assignments"
-              >
-                <span className="stat-icon">
-                  <ClipboardList size={20} />
-                </span>
-                <small>ASSIGNMENTS</small>
-                <strong>Operational</strong>
-                <p>Submit work & grade submissions →</p>
-              </article>
-              <article
-                className="stat-card clickable"
-                onClick={() => setCurrentView('exams')}
-                title="View Examinations"
-              >
-                <span className="stat-icon">
-                  <FileQuestion size={20} />
-                </span>
-                <small>EXAMINATIONS</small>
-                <strong>Operational</strong>
-                <p>Timed tests & auto-evaluation →</p>
-              </article>
-            </section>
-
-            <section className="panel">
-              <div className="panel-heading">
-                <div>
-                  <h3>System & API Status</h3>
-                  <p>Live health indicator for backend, database, and cache</p>
-                </div>
-                <span className={`status ${health?.success ? 'ok' : 'pending'}`}>
-                  {health?.success ? 'Connected' : 'Checking'}
-                </span>
-              </div>
-
-              {healthError && (
-                <p className="error">
-                  API connection unavailable: {healthError}. Verify local development services.
-                </p>
-              )}
-
-              <div className="health-grid">
-                {['application', 'database', 'redis'].map((name) => (
-                  <div className="health-item" key={name}>
-                    <span className={`dot ${health?.checks?.[name] === 'ok' ? 'green' : ''}`} />
-                    <span>{name}</span>
-                    <b>{health?.checks?.[name] ?? 'Pending'}</b>
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="panel" style={{ marginTop: '20px' }}>
-              <div className="panel-heading">
-                <div>
-                  <h3>Built Milestones Overview</h3>
-                  <p>Verified server-side policies, UUID models, and Sanctum tokens</p>
-                </div>
-                <span className="status ok">Operational</span>
-              </div>
-              <div className="architecture-grid">
-                <div className="arch-card">
-                  <UserCheck size={18} className="arch-card-icon" />
-                  <strong>Epic 2: Auth & RBAC</strong>
-                  <small>5 Roles, Form Requests, Sanctum Bearer tokens, Policies</small>
-                </div>
-                <div className="arch-card">
-                  <Building2 size={18} className="arch-card-icon" />
-                  <strong>Epic 3: Academic Management</strong>
-                  <small>Departments, Degree Programmes, Sessions, Semesters, Batches</small>
-                </div>
-                <div className="arch-card">
-                  <BookOpen size={18} className="arch-card-icon" />
-                  <strong>Epic 4 & 5: Courses & Lessons</strong>
-                  <small>Curricula, Video, PDFs, Markdown notes, Completion tracking</small>
-                </div>
-                <div className="arch-card">
-                  <ClipboardList size={18} className="arch-card-icon" />
-                  <strong>Epic 6: Assignments & Grading</strong>
-                  <small>Deadlines, file attachments, online submissions, teacher feedback</small>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
       </>
     )}
 

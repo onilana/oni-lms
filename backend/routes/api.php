@@ -11,6 +11,7 @@ use App\Http\Controllers\Api\V1\Assignment\AssignmentSubmissionController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\Course\CourseController;
 use App\Http\Controllers\Api\V1\Course\CourseEnrolmentController;
+use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\ExamController;
 use App\Http\Controllers\Api\V1\ExamAttemptController;
 use App\Http\Controllers\Api\V1\HealthController;
@@ -39,6 +40,9 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/change-password', [AuthController::class, 'changePassword']);
             Route::put('/profile', [AuthController::class, 'updateProfile']);
         });
+
+        // Student Dashboard
+        Route::get('/dashboard/student', [DashboardController::class, 'student']);
 
         // Administration & RBAC lookup
         Route::middleware('role:super_admin,college_admin')->group(function (): void {

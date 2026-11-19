@@ -3,11 +3,14 @@
 namespace Database\Seeders;
 
 use App\Models\AcademicSession;
+use App\Models\Batch;
 use App\Models\Course;
 use App\Models\CourseEnrolment;
 use App\Models\CourseInstructor;
 use App\Models\Department;
 use App\Models\Programme;
+use App\Models\Semester;
+use App\Models\StudentProfile;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 
@@ -72,6 +75,45 @@ class CourseSeeder extends Seeder
             ], [
                 'role' => 'lead',
                 'academic_session_id' => $session->id,
+            ]);
+        }
+
+        // Demo Student Profile & Enrolments
+        $student = User::where('email', 'student@onilms.edu')->first();
+        $batch = Batch::where('code', 'CSE-2026')->first();
+        $sem1 = Semester::where('academic_session_id', $session->id)->where('semester_number', 1)->first();
+
+        if ($student && $batch) {
+            StudentProfile::firstOrCreate(
+                ['user_id' => $student->id],
+                [
+                    'programme_id' => $btechCse->id,
+                    'batch_id' => $batch->id,
+                    'student_id_number' => 'STU-2026-0042',
+                    'admission_date' => '2026-08-01',
+                    'current_semester' => 1,
+                    'status' => 'active',
+                ]
+            );
+
+            CourseEnrolment::firstOrCreate([
+                'course_id' => $dsa->id,
+                'user_id' => $student->id,
+                'academic_session_id' => $session->id,
+            ], [
+                'semester_id' => $sem1?->id,
+                'status' => 'enrolled',
+                'enrolled_at' => now(),
+            ]);
+
+            CourseEnrolment::firstOrCreate([
+                'course_id' => $dbms->id,
+                'user_id' => $student->id,
+                'academic_session_id' => $session->id,
+            ], [
+                'semester_id' => $sem1?->id,
+                'status' => 'enrolled',
+                'enrolled_at' => now(),
             ]);
         }
     }
