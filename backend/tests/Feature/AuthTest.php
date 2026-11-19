@@ -1,0 +1,166 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\Role;
+use App\Models\User;
+use Database\Seeders\RoleAndPermissionSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Hash;
+use Tests\TestCase;
+
+class AuthTest extends TestCase
+{
+    use RefreshDatabase;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->seed(RoleAndPermissionSeeder::class);
+    }
+
+    public function test_user_can_login_with_valid_credentials_and_receives_token(): void
+    {
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'admin@onilms.edu',
+            'password' => 'OniAdmin@2026!',
+            'device_name' => 'test-device',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'token',
+                'token_type',
+                'user' => [
+                    'id',
+                    'name',
+                    'email',
+                    'status',
+                    'roles',
+                    'permissions',
+                ],
+            ]);
+
+        $this->assertNotEmpty($response->json('token'));
+        $this->assertSame('Bearer', $response->json('token_type'));
+        $this->assertSame('admin@onilms.edu', $response->json('user.email'));
+    }
+
+    public function test_login_fails_with_invalid_credentials(): void
+    {
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'admin@onilms.edu',
+            'password' => 'WrongPassword123!',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['email']);
+    }
+
+    public function test_inactive_user_cannot_login(): void
+    {
+        $inactive = User::factory()->create([
+            'email' => 'inactive@onilms.edu',
+            'password' => Hash::make('Secret123!'),
+            'status' => 'inactive',
+        ]);
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'inactive@onilms.edu',
+            'password' => 'Secret123!',
+        ]);
+
+        $response->assertStatus(403)
+            ->assertJson([
+                'message' => 'Your account is currently inactive. Please contact the administrator.',
+            ]);
+    }
+
+    public function test_authenticated_user_can_retrieve_profile_via_me(): void
+    {
+        $user = User::where('email', 'admin@onilms.edu')->first();
+        $token = $user->createToken('test')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('user.email', 'admin@onilms.edu');
+    }
+
+    public function test_user_can_logout_and_token_is_revoked(): void
+    {
+        $user = User::where('email', 'admin@onilms.edu')->first();
+        $token = $user->createToken('test')->plainTextToken;
+
+        $logoutResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v1/auth/logout');
+
+        $logoutResponse->assertStatus(200)
+            ->assertJson(['message' => 'Successfully logged out.']);
+
+        // Reset cached guard state between requests in the test runner
+        $this->app['auth']->forgetGuards();
+
+        // Subsequent call with the same token must fail
+        $meResponse = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/auth/me');
+
+        $meResponse->assertStatus(401);
+    }
+
+    public function test_super_admin_can_access_roles_endpoint(): void
+    {
+        $admin = User::where('email', 'admin@onilms.edu')->first();
+        $token = $admin->createToken('admin')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/roles');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'roles' => [
+                    '*' => ['id', 'name', 'label'],
+                ],
+            ]);
+    }
+
+    public function test_student_is_forbidden_from_roles_endpoint(): void
+    {
+        $studentRole = Role::where('name', Role::STUDENT)->first();
+
+        $student = User::create([
+            'name' => 'Alice Student',
+            'email' => 'alice@student.onilms.edu',
+            'password' => Hash::make('StudentPass123!'),
+            'status' => 'active',
+        ]);
+        $student->roles()->attach($studentRole->id);
+
+        $token = $student->createToken('student')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->getJson('/api/v1/roles');
+
+        $response->assertStatus(403)
+            ->assertJson(['message' => 'Forbidden: insufficient role privileges.']);
+    }
+
+    public function test_user_can_change_password(): void
+    {
+        $user = User::where('email', 'admin@onilms.edu')->first();
+        $token = $user->createToken('test')->plainTextToken;
+
+        $response = $this->withHeader('Authorization', 'Bearer '.$token)
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => 'OniAdmin@2026!',
+                'new_password' => 'NewSecurePassword2026!',
+                'new_password_confirmation' => 'NewSecurePassword2026!',
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson(['message' => 'Password updated successfully.']);
+
+        $this->assertTrue(Hash::check('NewSecurePassword2026!', $user->fresh()->password));
+    }
+}

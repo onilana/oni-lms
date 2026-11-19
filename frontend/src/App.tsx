@@ -1,60 +1,296 @@
 import { useEffect, useState } from 'react';
-import { BookOpen, ClipboardList, GraduationCap, LayoutDashboard, Users } from 'lucide-react';
+import {
+  BookOpen,
+  ClipboardList,
+  GraduationCap,
+  LayoutDashboard,
+  LogOut,
+  LogIn,
+  ShieldCheck,
+  UserCheck,
+  Users,
+  Building2,
+  CalendarCheck
+} from 'lucide-react';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { LoginModal } from './components/LoginModal';
+import { AcademicView } from './components/AcademicView';
+import { CoursesView } from './components/CoursesView';
+import { apiRequest } from './api/client';
+import type { HealthStatus } from './types/auth';
 
-const API = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1';
-
-type Health = {
-  success: boolean;
-  service: string;
-  checks: Record<string, string>;
-};
-
-export default function App() {
-  const [health, setHealth] = useState<Health | null>(null);
-  const [error, setError] = useState('');
+function MainApp() {
+  const { user, logout, hasRole, hasPermission } = useAuth();
+  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses'>('dashboard');
+  const [health, setHealth] = useState<HealthStatus | null>(null);
+  const [healthError, setHealthError] = useState('');
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
 
   useEffect(() => {
-    fetch(`${API}/health`)
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`API returned ${response.status}`);
-        return response.json() as Promise<Health>;
-      })
+    apiRequest<HealthStatus>('/health')
       .then(setHealth)
-      .catch((reason: Error) => setError(reason.message));
+      .catch((err: Error) => setHealthError(err.message));
   }, []);
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
+  const isSuperAdmin = hasRole('super_admin');
+  const isTeacher = hasRole('teacher');
+  const canViewAcademic = hasPermission('academic.view') || isSuperAdmin;
 
   return (
     <div className="app-shell">
       <aside className="sidebar">
-        <div className="brand"><span className="brand-mark">O</span><div><strong>ONI LMS</strong><small>Learning Portal</small></div></div>
+        <div className="brand">
+          <span className="brand-mark">O</span>
+          <div>
+            <strong>ONI LMS</strong>
+            <small>College Learning Portal</small>
+          </div>
+        </div>
+
         <div className="nav-label">WORKSPACE</div>
-        <a className="nav-item active" href="#"><LayoutDashboard size={18} /> Dashboard</a>
-        <a className="nav-item" href="#"><BookOpen size={18} /> Courses</a>
-        <a className="nav-item" href="#"><ClipboardList size={18} /> Assignments</a>
-        <a className="nav-item" href="#"><Users size={18} /> Users</a>
-        <div className="sidebar-footer">Starter build · v0.1.0</div>
+        <button
+          className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
+          onClick={() => setCurrentView('dashboard')}
+        >
+          <LayoutDashboard size={18} /> Dashboard
+        </button>
+        <button
+          className={`nav-item ${currentView === 'courses' ? 'active' : ''}`}
+          onClick={() => setCurrentView('courses')}
+        >
+          <BookOpen size={18} /> Courses
+        </button>
+        <button className="nav-item" onClick={() => alert('Assignments & Coursework scheduled for Milestone 4')}>
+          <ClipboardList size={18} /> Assignments
+        </button>
+
+        {canViewAcademic && (
+          <>
+            <div className="nav-label" style={{ marginTop: '16px' }}>ADMINISTRATION</div>
+            <button
+              className={`nav-item ${currentView === 'academic' ? 'active' : ''}`}
+              onClick={() => setCurrentView('academic')}
+            >
+              <Building2 size={18} /> Academic Setup
+            </button>
+            <button className="nav-item" onClick={() => alert('User Directory scheduled for next sub-task')}>
+              <Users size={18} /> User Directory
+            </button>
+          </>
+        )}
+
+        {(isTeacher || isSuperAdmin) && (
+          <button className="nav-item" onClick={() => alert('Attendance scheduled for Milestone 5')}>
+            <CalendarCheck size={18} /> Attendance
+          </button>
+        )}
+
+        <div className="sidebar-footer">
+          {user ? (
+            <div className="user-sidebar-card">
+              <div className="user-sidebar-info">
+                <strong>{user.name}</strong>
+                <span>{user.roles[0]?.label ?? 'Member'}</span>
+              </div>
+              <button className="btn-icon" onClick={logout} title="Sign Out">
+                <LogOut size={16} />
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-secondary btn-block" onClick={() => setIsLoginOpen(true)}>
+              <LogIn size={15} />
+              <span>Sign In</span>
+            </button>
+          )}
+          <div className="version-tag">Milestone 3 · Courses & Enrolment</div>
+        </div>
       </aside>
 
       <main className="main">
-        <header className="topbar"><div><span className="eyebrow">COLLEGE LEARNING PLATFORM</span><h1>Dashboard</h1></div><div className="avatar">ON</div></header>
-        <section className="welcome">
-          <div><span className="eyebrow light">WELCOME TO YOUR LEARNING SPACE</span><h2>Build. Learn. Achieve.</h2><p>ONI LMS foundation is ready for the next development phase.</p></div>
-          <GraduationCap className="welcome-icon" size={76} strokeWidth={1.2} />
-        </section>
-        <section className="stats">
-          <article className="stat-card"><span className="stat-icon"><BookOpen size={20} /></span><small>COURSES</small><strong>—</strong><p>Not configured yet</p></article>
-          <article className="stat-card"><span className="stat-icon"><Users size={20} /></span><small>STUDENTS</small><strong>—</strong><p>Not configured yet</p></article>
-          <article className="stat-card"><span className="stat-icon"><ClipboardList size={20} /></span><small>ASSIGNMENTS</small><strong>—</strong><p>Not configured yet</p></article>
-        </section>
-        <section className="panel">
-          <div className="panel-heading"><div><h3>System status</h3><p>Live connection check for the development services</p></div><span className={`status ${health?.success ? 'ok' : 'pending'}`}>{health?.success ? 'Connected' : 'Checking'}</span></div>
-          {error && <p className="error">API connection unavailable: {error}. Check that Docker services are running.</p>}
-          <div className="health-grid">
-            {['application', 'database', 'redis'].map((name) => <div className="health-item" key={name}><span className={`dot ${health?.checks?.[name] === 'ok' ? 'green' : ''}`} /><span>{name}</span><b>{health?.checks?.[name] ?? 'Pending'}</b></div>)}
+        <header className="topbar">
+          <div>
+            <span className="eyebrow">COLLEGE LEARNING PLATFORM</span>
+            <h1>
+              {currentView === 'academic'
+                ? 'Academic Management'
+                : currentView === 'courses'
+                ? 'Courses & Curricula'
+                : 'Dashboard'}
+            </h1>
           </div>
-        </section>
-        <p className="footnote">This is the initial software foundation, not a finished production LMS.</p>
+          <div className="topbar-actions">
+            {user ? (
+              <div className="user-pill">
+                <span className="avatar">{getInitials(user.name)}</span>
+                <div className="user-pill-text">
+                  <strong>{user.name}</strong>
+                  <span className="badge badge-role">{user.roles[0]?.label ?? 'User'}</span>
+                </div>
+                <button className="btn-icon-subtle" onClick={logout} title="Sign out">
+                  <LogOut size={16} />
+                </button>
+              </div>
+            ) : (
+              <button className="btn btn-primary" onClick={() => setIsLoginOpen(true)}>
+                <LogIn size={16} />
+                <span>Sign In</span>
+              </button>
+            )}
+          </div>
+        </header>
+
+        {currentView === 'academic' && <AcademicView />}
+        {currentView === 'courses' && <CoursesView onOpenLogin={() => setIsLoginOpen(true)} />}
+        {currentView === 'dashboard' && (
+          <>
+            <section className="welcome">
+              <div>
+                <span className="eyebrow light">
+                  {user ? `WELCOME BACK, ${user.name.toUpperCase()}` : 'WELCOME TO ONI LEARNING SPACE'}
+                </span>
+                <h2>{user ? `Ready for your academic day?` : 'Build. Learn. Achieve.'}</h2>
+                <p>
+                  {user
+                    ? `Logged in with verified role: ${user.roles.map((r) => r.label).join(', ')}.`
+                    : 'A clean, modular LMS foundation built with Laravel 12 & React TypeScript.'}
+                </p>
+              </div>
+              <GraduationCap className="welcome-icon" size={76} strokeWidth={1.2} />
+            </section>
+
+            {user && (
+              <section className="role-banner">
+                <ShieldCheck size={20} className="role-banner-icon" />
+                <div className="role-banner-content">
+                  <strong>Active Session Permissions:</strong>
+                  <div className="permissions-pills">
+                    {user.permissions.includes('*') ? (
+                      <span className="perm-chip all">Full System Access (Super Admin)</span>
+                    ) : (
+                      user.permissions.map((p) => (
+                        <span key={p} className="perm-chip">
+                          {p}
+                        </span>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </section>
+            )}
+
+            <section className="stats">
+              <article
+                className="stat-card clickable"
+                onClick={() => setCurrentView('courses')}
+                title="View Courses"
+              >
+                <span className="stat-icon">
+                  <BookOpen size={20} />
+                </span>
+                <small>COURSE CATALOGUE</small>
+                <strong>Operational</strong>
+                <p>Browse & enroll in courses →</p>
+              </article>
+              <article
+                className="stat-card clickable"
+                onClick={() => setCurrentView('academic')}
+                title="View Academic Setup"
+              >
+                <span className="stat-icon">
+                  <Building2 size={20} />
+                </span>
+                <small>ACADEMIC STRUCTURE</small>
+                <strong>Operational</strong>
+                <p>Departments, Degrees & Cohorts →</p>
+              </article>
+              <article className="stat-card">
+                <span className="stat-icon">
+                  <ClipboardList size={20} />
+                </span>
+                <small>ASSIGNMENTS</small>
+                <strong>—</strong>
+                <p>Milestone 4: Lessons & Coursework</p>
+              </article>
+            </section>
+
+            <section className="panel">
+              <div className="panel-heading">
+                <div>
+                  <h3>System & API Status</h3>
+                  <p>Live health indicator for backend, database, and cache</p>
+                </div>
+                <span className={`status ${health?.success ? 'ok' : 'pending'}`}>
+                  {health?.success ? 'Connected' : 'Checking'}
+                </span>
+              </div>
+
+              {healthError && (
+                <p className="error">
+                  API connection unavailable: {healthError}. Verify local development services.
+                </p>
+              )}
+
+              <div className="health-grid">
+                {['application', 'database', 'redis'].map((name) => (
+                  <div className="health-item" key={name}>
+                    <span className={`dot ${health?.checks?.[name] === 'ok' ? 'green' : ''}`} />
+                    <span>{name}</span>
+                    <b>{health?.checks?.[name] ?? 'Pending'}</b>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="panel" style={{ marginTop: '20px' }}>
+              <div className="panel-heading">
+                <div>
+                  <h3>Built Milestones Overview</h3>
+                  <p>Verified server-side policies, UUID models, and Sanctum tokens</p>
+                </div>
+                <span className="status ok">Operational</span>
+              </div>
+              <div className="architecture-grid">
+                <div className="arch-card">
+                  <UserCheck size={18} className="arch-card-icon" />
+                  <strong>Epic 2: Auth & RBAC</strong>
+                  <small>5 Roles, Form Requests, Sanctum Bearer tokens, Policies</small>
+                </div>
+                <div className="arch-card">
+                  <Building2 size={18} className="arch-card-icon" />
+                  <strong>Epic 3: Academic Management</strong>
+                  <small>Departments, Degree Programmes, Sessions, Semesters, Batches</small>
+                </div>
+                <div className="arch-card">
+                  <BookOpen size={18} className="arch-card-icon" />
+                  <strong>Epic 4: Courses & Enrolment</strong>
+                  <small>Course Builder, Instructor assignments, Student enrolments</small>
+                </div>
+              </div>
+            </section>
+          </>
+        )}
+
+        <p className="footnote">ONI Learning Management System · Epics 1 to 4 Operational</p>
       </main>
+
+      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MainApp />
+    </AuthProvider>
   );
 }

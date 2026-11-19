@@ -3,7 +3,7 @@
         'name' => 'oni-lms/backend',
         'pretty_version' => 'dev-main',
         'version' => 'dev-main',
-        'reference' => '34a7ae537339abbb67d0a14457b44de099c0a435',
+        'reference' => 'ad3142161d75bebd1116592ad81f70e38f3bc920',
         'type' => 'project',
         'install_path' => __DIR__ . '/../../',
         'aliases' => array(),
@@ -397,6 +397,15 @@
             'aliases' => array(),
             'dev_requirement' => false,
         ),
+        'laravel/sanctum' => array(
+            'pretty_version' => 'v4.5.0',
+            'version' => '4.5.0.0',
+            'reference' => 'a8f7ef1bd5f8b78159effa1ffae851b0dc72cd8b',
+            'type' => 'library',
+            'install_path' => __DIR__ . '/../laravel/sanctum',
+            'aliases' => array(),
+            'dev_requirement' => false,
+        ),
         'laravel/serializable-closure' => array(
             'pretty_version' => 'v2.2.0',
             'version' => '2.2.0.0',
@@ -550,7 +559,7 @@
         'oni-lms/backend' => array(
             'pretty_version' => 'dev-main',
             'version' => 'dev-main',
-            'reference' => '34a7ae537339abbb67d0a14457b44de099c0a435',
+            'reference' => 'ad3142161d75bebd1116592ad81f70e38f3bc920',
             'type' => 'project',
             'install_path' => __DIR__ . '/../../',
             'aliases' => array(),
