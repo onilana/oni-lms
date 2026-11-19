@@ -87,6 +87,12 @@ class RoleAndPermissionSeeder extends Seeder
             // Attendance
             ['name' => 'attendance.view', 'label' => 'View Attendance', 'group' => 'attendance'],
             ['name' => 'attendance.mark', 'label' => 'Mark and Update Attendance', 'group' => 'attendance'],
+
+            // Certificates
+            ['name' => 'certificates.view', 'label' => 'View Certificates', 'group' => 'certificates'],
+            ['name' => 'certificates.manage', 'label' => 'Issue and Manage Certificates', 'group' => 'certificates'],
+            ['name' => 'certificates.claim', 'label' => 'Claim Course Certificates', 'group' => 'certificates'],
+            ['name' => 'certificates.revoke', 'label' => 'Revoke Issued Certificates', 'group' => 'certificates'],
         ];
 
         $permissionModels = [];
@@ -105,6 +111,7 @@ class RoleAndPermissionSeeder extends Seeder
             'assignments.view', 'assignments.manage', 'assignments.grade',
             'exams.view', 'exams.manage', 'exams.grade',
             'attendance.view', 'attendance.mark',
+            'certificates.view', 'certificates.manage',
         ];
         $roles[Role::TEACHER]->permissions()->sync(
             collect($teacherPerms)->map(fn ($p) => $permissionModels[$p]->id)
@@ -117,6 +124,7 @@ class RoleAndPermissionSeeder extends Seeder
             'assignments.view', 'assignments.submit',
             'exams.view', 'exams.attempt',
             'attendance.view',
+            'certificates.view', 'certificates.claim',
         ];
         $roles[Role::STUDENT]->permissions()->sync(
             collect($studentPerms)->map(fn ($p) => $permissionModels[$p]->id)

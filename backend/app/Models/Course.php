@@ -99,6 +99,56 @@ class Course extends Model
         return $this->hasMany(Question::class)->orderBy('created_at', 'desc');
     }
 
+    public function attendanceSessions(): HasMany
+    {
+        return $this->hasMany(AttendanceSession::class)->orderBy('session_date', 'desc');
+    }
+
+    public function certificates(): HasMany
+    {
+        return $this->hasMany(Certificate::class);
+    }
+
+    public function calculateAttendanceFor(User $student): array
+    {
+        $sessionsCount = $this->attendanceSessions()->where('status', 'completed')->count();
+        if ($sessionsCount === 0) {
+            return [
+                'total_sessions' => 0,
+                'present' => 0,
+                'absent' => 0,
+                'late' => 0,
+                'excused' => 0,
+                'percentage' => 100,
+                'has_shortage' => false,
+            ];
+        }
+
+        $records = AttendanceRecord::whereHas('session', function ($query) {
+            $query->where('course_id', $this->id)->where('status', 'completed');
+        })->where('student_user_id', $student->id)->get();
+
+        $present = $records->where('status', 'present')->count();
+        $late = $records->where('status', 'late')->count();
+        $absent = $records->where('status', 'absent')->count();
+        $excused = $records->where('status', 'excused')->count();
+
+        // Late counts as attended or partial; standard college LMS counts late as attended
+        $attended = $present + $late;
+        $effectiveTotal = max(1, $sessionsCount - $excused);
+        $percentage = (int) round(($attended / $effectiveTotal) * 100);
+
+        return [
+            'total_sessions' => $sessionsCount,
+            'present' => $present,
+            'late' => $late,
+            'absent' => $absent,
+            'excused' => $excused,
+            'percentage' => min(100, $percentage),
+            'has_shortage' => $percentage < 75,
+        ];
+    }
+
     public function calculateProgressFor(User $user): array
     {
         $totalLessons = $this->lessons()->where('status', 'published')->count();

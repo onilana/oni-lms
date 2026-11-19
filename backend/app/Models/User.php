@@ -70,6 +70,11 @@ class User extends Authenticatable
         return $this->hasMany(AssignmentSubmission::class);
     }
 
+    public function attendanceRecords(): HasMany
+    {
+        return $this->hasMany(AttendanceRecord::class, 'student_user_id');
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->hasRole(Role::SUPER_ADMIN);
@@ -92,5 +97,10 @@ class User extends Authenticatable
             ->flatMap(fn (Role $role) => $role->permissions)
             ->pluck('name')
             ->contains($permission);
+    }
+
+    public function certificates(): HasMany
+    {
+        return $this->hasMany(Certificate::class);
     }
 }

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyRound, Lock, Mail, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Lock, Mail, ShieldAlert, Sparkles, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 
@@ -12,6 +12,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { login } = useAuth();
   const [email, setEmail] = useState('admin@onilms.edu');
   const [password, setPassword] = useState('OniAdmin@2026!');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -84,12 +85,21 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
               <Lock size={16} className="input-icon" />
               <input
                 id="login-password"
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••••••"
               />
+              <button
+                type="button"
+                className="btn-toggle-pw"
+                onClick={() => setShowPassword(!showPassword)}
+                title={showPassword ? 'Hide password' : 'Show password'}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '0 8px', color: '#64748b' }}
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
 
@@ -100,7 +110,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
 
           <div className="dev-presets">
             <span className="dev-presets-label">
-              <Sparkles size={13} /> Quick Test Credentials
+              <Sparkles size={13} /> Quick Test Credentials (1-Click Fill)
             </span>
             <div className="preset-buttons">
               <button
@@ -109,6 +119,13 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
                 onClick={() => setPreset('admin@onilms.edu', 'OniAdmin@2026!')}
               >
                 Super Admin
+              </button>
+              <button
+                type="button"
+                className="btn-chip"
+                onClick={() => setPreset('student@onilms.edu', 'OniStudent@2026!')}
+              >
+                Student (Aarav)
               </button>
             </div>
           </div>

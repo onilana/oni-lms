@@ -26,7 +26,7 @@ import { useAuth } from '../context/AuthContext';
 
 interface StudentDashboardViewProps {
   onOpenCourse: (courseId: string) => void;
-  onNavigateTo: (view: 'courses' | 'assignments' | 'exams' | 'academic') => void;
+  onNavigateTo: (view: 'courses' | 'assignments' | 'exams' | 'academic' | 'attendance') => void;
   onOpenLogin: () => void;
 }
 
@@ -141,7 +141,12 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
 
       {/* Metrics Highlights Bar */}
       <section className="student-metrics-row">
-        <article className="student-metric-card">
+        <article
+          className="student-metric-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('attendance')}
+          title="View Attendance Breakdown"
+        >
           <div className="metric-header">
             <small>ENROLLED COURSES</small>
             <BookOpen size={18} className="metric-icon blue" />
@@ -150,7 +155,12 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
           <span className="metric-sub">Active semester curricula</span>
         </article>
 
-        <article className="student-metric-card">
+        <article
+          className="student-metric-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('attendance')}
+          title="View Attendance Breakdown"
+        >
           <div className="metric-header">
             <small>COURSE COMPLETION</small>
             <TrendingUp size={18} className="metric-icon green" />
@@ -161,7 +171,12 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
           </span>
         </article>
 
-        <article className="student-metric-card">
+        <article
+          className="student-metric-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('attendance')}
+          title="View Attendance Breakdown"
+        >
           <div className="metric-header">
             <small>ATTENDANCE RATE</small>
             <UserCheck size={18} className="metric-icon purple" />
@@ -170,7 +185,12 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
           <span className="metric-sub">Above 75% required quota</span>
         </article>
 
-        <article className="student-metric-card">
+        <article
+          className="student-metric-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('attendance')}
+          title="View Attendance Breakdown"
+        >
           <div className="metric-header">
             <small>PENDING TASKS</small>
             <ClipboardList size={18} className="metric-icon amber" />

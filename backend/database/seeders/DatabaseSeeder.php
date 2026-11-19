@@ -15,6 +15,8 @@ class DatabaseSeeder extends Seeder
             LessonSeeder::class,
             AssignmentSeeder::class,
             ExamSeeder::class,
+            AttendanceSeeder::class,
+            CertificateSeeder::class,
         ]);
     }
 }

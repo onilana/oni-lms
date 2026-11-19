@@ -8,7 +8,9 @@ use App\Http\Controllers\Api\V1\Academic\SemesterController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentAttachmentController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentSubmissionController;
+use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\AuthController;
+use App\Http\Controllers\Api\V1\Certificate\CertificateController;
 use App\Http\Controllers\Api\V1\Course\CourseController;
 use App\Http\Controllers\Api\V1\Course\CourseEnrolmentController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -30,6 +32,9 @@ Route::prefix('v1')->group(function (): void {
     Route::prefix('auth')->group(function (): void {
         Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:10,1');
     });
+
+    // Public Certificate Verification (Epic 9)
+    Route::get('/certificates/verify/{code}', [CertificateController::class, 'verify']);
 
     // Authenticated endpoints
     Route::middleware('auth:sanctum')->group(function (): void {
@@ -185,5 +190,29 @@ Route::prefix('v1')->group(function (): void {
             Route::post('/save', [ExamAttemptController::class, 'saveProgress']);
             Route::post('/submit', [ExamAttemptController::class, 'submit']);
         });
+
+        // Attendance Management (Epic 8)
+        Route::prefix('courses/{course}/attendance')->group(function (): void {
+            Route::get('/sessions', [AttendanceController::class, 'index']);
+            Route::post('/sessions', [AttendanceController::class, 'store']);
+            Route::get('/summary', [AttendanceController::class, 'courseSummary']);
+        });
+
+        Route::prefix('attendance/sessions/{session}')->group(function (): void {
+            Route::get('/', [AttendanceController::class, 'show']);
+            Route::put('/', [AttendanceController::class, 'update']);
+            Route::delete('/', [AttendanceController::class, 'destroy']);
+            Route::post('/bulk-mark', [AttendanceController::class, 'bulkMark']);
+        });
+
+        Route::get('/my-attendance', [AttendanceController::class, 'myAttendance']);
+
+        // Certificate Management (Epic 9)
+        Route::get('/my-certificates', [CertificateController::class, 'myCertificates']);
+        Route::get('/courses/{course}/certificate/eligibility', [CertificateController::class, 'eligibility']);
+        Route::post('/courses/{course}/certificate/claim', [CertificateController::class, 'claim']);
+        Route::post('/certificates/issue', [CertificateController::class, 'issue']);
+        Route::get('/certificates/{certificate}', [CertificateController::class, 'show']);
+        Route::post('/certificates/{certificate}/revoke', [CertificateController::class, 'revoke']);
     });
 });

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
+  Award,
   BookOpen,
   ClipboardList,
   GraduationCap,
@@ -21,12 +22,14 @@ import { LessonPlayerView } from './components/LessonPlayerView';
 import { AssignmentsView } from './components/AssignmentsView';
 import { ExamsView } from './components/ExamsView';
 import { StudentDashboardView } from './components/StudentDashboardView';
+import { AttendanceView } from './components/AttendanceView';
+import { CertificatesView } from './components/CertificatesView';
 import { apiRequest } from './api/client';
 import type { HealthStatus } from './types/auth';
 
 function MainApp() {
   const { user, logout, hasRole, hasPermission } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses' | 'assignments' | 'exams'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses' | 'assignments' | 'exams' | 'attendance' | 'certificates'>('dashboard');
   const [learningCourseId, setLearningCourseId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthError, setHealthError] = useState('');
@@ -115,11 +118,25 @@ function MainApp() {
           </>
         )}
 
-        {(isTeacher || isSuperAdmin) && (
-          <button className="nav-item" onClick={() => alert('Attendance scheduled for Milestone 5')}>
-            <CalendarCheck size={18} /> Attendance
-          </button>
-        )}
+        <button
+          className={`nav-item ${currentView === 'attendance' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('attendance');
+            setLearningCourseId(null);
+          }}
+        >
+          <CalendarCheck size={18} /> Attendance
+        </button>
+
+        <button
+          className={`nav-item ${currentView === 'certificates' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('certificates');
+            setLearningCourseId(null);
+          }}
+        >
+          <Award size={18} /> Certificates
+        </button>
 
         <div className="sidebar-footer">
           {user ? (
@@ -138,7 +155,7 @@ function MainApp() {
               <span>Sign In</span>
             </button>
           )}
-          <div className="version-tag">Milestone 3 · Courses & Enrolment</div>
+          <div className="version-tag">Milestone 9 · Certificates &amp; Credentials</div>
         </div>
       </aside>
 
@@ -155,6 +172,10 @@ function MainApp() {
                 ? 'Assignments & Coursework'
                 : currentView === 'exams'
                 ? 'Examinations & Assessments'
+                : currentView === 'attendance'
+                ? 'Attendance & Session Logs'
+                : currentView === 'certificates'
+                ? 'Certificates & Degree Verification'
                 : 'Dashboard'}
             </h1>
           </div>
@@ -195,6 +216,8 @@ function MainApp() {
             )}
             {currentView === 'assignments' && <AssignmentsView />}
             {currentView === 'exams' && <ExamsView />}
+            {currentView === 'attendance' && <AttendanceView />}
+            {currentView === 'certificates' && <CertificatesView currentUser={user} />}
             {currentView === 'dashboard' && (
               <>
                 <StudentDashboardView
@@ -239,7 +262,7 @@ function MainApp() {
       </>
     )}
 
-        <p className="footnote">ONI Learning Management System · Epics 1 to 6 Operational</p>
+        <p className="footnote">ONI Learning Management System · Epics 1 to 9 Operational (Certificates, Attendance, Exams, RBAC)</p>
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
