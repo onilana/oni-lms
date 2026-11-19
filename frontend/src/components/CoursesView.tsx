@@ -19,9 +19,10 @@ import { useAuth } from '../context/AuthContext';
 
 interface CoursesViewProps {
   onOpenLogin: () => void;
+  onOpenLearning: (courseId: string) => void;
 }
 
-export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin }) => {
+export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLearning }) => {
   const { user, hasPermission, hasRole } = useAuth();
   const canCreateCourse = hasPermission('courses.create') || hasRole('teacher') || hasRole('super_admin');
 
@@ -257,10 +258,13 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin }) => {
                   <FileText size={14} /> Syllabus & Details
                 </button>
 
-                {c.is_enrolled ? (
-                  <span className="badge-enrolled">
-                    <CheckCircle size={14} /> Enrolled
-                  </span>
+                {c.is_enrolled || canCreateCourse ? (
+                  <button
+                    className="btn btn-secondary btn-sm"
+                    onClick={() => onOpenLearning(c.id)}
+                  >
+                    <BookOpen size={13} /> Lessons Player
+                  </button>
                 ) : (
                   <button
                     className="btn btn-primary btn-sm"

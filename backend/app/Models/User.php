@@ -65,6 +65,11 @@ class User extends Authenticatable
             ->withTimestamps();
     }
 
+    public function assignmentSubmissions(): HasMany
+    {
+        return $this->hasMany(AssignmentSubmission::class);
+    }
+
     public function isSuperAdmin(): bool
     {
         return $this->hasRole(Role::SUPER_ADMIN);

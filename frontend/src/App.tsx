@@ -10,18 +10,23 @@ import {
   UserCheck,
   Users,
   Building2,
-  CalendarCheck
+  CalendarCheck,
+  FileQuestion
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginModal } from './components/LoginModal';
 import { AcademicView } from './components/AcademicView';
 import { CoursesView } from './components/CoursesView';
+import { LessonPlayerView } from './components/LessonPlayerView';
+import { AssignmentsView } from './components/AssignmentsView';
+import { ExamsView } from './components/ExamsView';
 import { apiRequest } from './api/client';
 import type { HealthStatus } from './types/auth';
 
 function MainApp() {
   const { user, logout, hasRole, hasPermission } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses' | 'assignments' | 'exams'>('dashboard');
+  const [learningCourseId, setLearningCourseId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthError, setHealthError] = useState('');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
@@ -58,19 +63,40 @@ function MainApp() {
 
         <div className="nav-label">WORKSPACE</div>
         <button
-          className={`nav-item ${currentView === 'dashboard' ? 'active' : ''}`}
-          onClick={() => setCurrentView('dashboard')}
+          className={`nav-item ${currentView === 'dashboard' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('dashboard');
+            setLearningCourseId(null);
+          }}
         >
           <LayoutDashboard size={18} /> Dashboard
         </button>
         <button
-          className={`nav-item ${currentView === 'courses' ? 'active' : ''}`}
-          onClick={() => setCurrentView('courses')}
+          className={`nav-item ${currentView === 'courses' || learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('courses');
+            setLearningCourseId(null);
+          }}
         >
           <BookOpen size={18} /> Courses
         </button>
-        <button className="nav-item" onClick={() => alert('Assignments & Coursework scheduled for Milestone 4')}>
+        <button
+          className={`nav-item ${currentView === 'assignments' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('assignments');
+            setLearningCourseId(null);
+          }}
+        >
           <ClipboardList size={18} /> Assignments
+        </button>
+        <button
+          className={`nav-item ${currentView === 'exams' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('exams');
+            setLearningCourseId(null);
+          }}
+        >
+          <FileQuestion size={18} /> Examinations
         </button>
 
         {canViewAcademic && (
@@ -124,6 +150,10 @@ function MainApp() {
                 ? 'Academic Management'
                 : currentView === 'courses'
                 ? 'Courses & Curricula'
+                : currentView === 'assignments'
+                ? 'Assignments & Coursework'
+                : currentView === 'exams'
+                ? 'Examinations & Assessments'
                 : 'Dashboard'}
             </h1>
           </div>
@@ -148,9 +178,23 @@ function MainApp() {
           </div>
         </header>
 
-        {currentView === 'academic' && <AcademicView />}
-        {currentView === 'courses' && <CoursesView onOpenLogin={() => setIsLoginOpen(true)} />}
-        {currentView === 'dashboard' && (
+        {learningCourseId ? (
+          <LessonPlayerView
+            courseId={learningCourseId}
+            onBack={() => setLearningCourseId(null)}
+          />
+        ) : (
+          <>
+            {currentView === 'academic' && <AcademicView />}
+            {currentView === 'courses' && (
+              <CoursesView
+                onOpenLogin={() => setIsLoginOpen(true)}
+                onOpenLearning={(cId) => setLearningCourseId(cId)}
+              />
+            )}
+            {currentView === 'assignments' && <AssignmentsView />}
+            {currentView === 'exams' && <ExamsView />}
+            {currentView === 'dashboard' && (
           <>
             <section className="welcome">
               <div>
@@ -212,13 +256,29 @@ function MainApp() {
                 <strong>Operational</strong>
                 <p>Departments, Degrees & Cohorts →</p>
               </article>
-              <article className="stat-card">
+              <article
+                className="stat-card clickable"
+                onClick={() => setCurrentView('assignments')}
+                title="View Assignments"
+              >
                 <span className="stat-icon">
                   <ClipboardList size={20} />
                 </span>
                 <small>ASSIGNMENTS</small>
-                <strong>—</strong>
-                <p>Milestone 4: Lessons & Coursework</p>
+                <strong>Operational</strong>
+                <p>Submit work & grade submissions →</p>
+              </article>
+              <article
+                className="stat-card clickable"
+                onClick={() => setCurrentView('exams')}
+                title="View Examinations"
+              >
+                <span className="stat-icon">
+                  <FileQuestion size={20} />
+                </span>
+                <small>EXAMINATIONS</small>
+                <strong>Operational</strong>
+                <p>Timed tests & auto-evaluation →</p>
               </article>
             </section>
 
@@ -271,15 +331,22 @@ function MainApp() {
                 </div>
                 <div className="arch-card">
                   <BookOpen size={18} className="arch-card-icon" />
-                  <strong>Epic 4: Courses & Enrolment</strong>
-                  <small>Course Builder, Instructor assignments, Student enrolments</small>
+                  <strong>Epic 4 & 5: Courses & Lessons</strong>
+                  <small>Curricula, Video, PDFs, Markdown notes, Completion tracking</small>
+                </div>
+                <div className="arch-card">
+                  <ClipboardList size={18} className="arch-card-icon" />
+                  <strong>Epic 6: Assignments & Grading</strong>
+                  <small>Deadlines, file attachments, online submissions, teacher feedback</small>
                 </div>
               </div>
             </section>
           </>
         )}
+      </>
+    )}
 
-        <p className="footnote">ONI Learning Management System · Epics 1 to 4 Operational</p>
+        <p className="footnote">ONI Learning Management System · Epics 1 to 6 Operational</p>
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />

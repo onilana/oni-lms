@@ -74,6 +74,56 @@ class Course extends Model
             ->withTimestamps();
     }
 
+    public function sections(): HasMany
+    {
+        return $this->hasMany(CourseSection::class)->orderBy('order_index');
+    }
+
+    public function lessons(): HasMany
+    {
+        return $this->hasMany(Lesson::class)->orderBy('order_index');
+    }
+
+    public function assignments(): HasMany
+    {
+        return $this->hasMany(Assignment::class)->orderBy('due_date');
+    }
+
+    public function exams(): HasMany
+    {
+        return $this->hasMany(Exam::class)->orderBy('created_at', 'desc');
+    }
+
+    public function questions(): HasMany
+    {
+        return $this->hasMany(Question::class)->orderBy('created_at', 'desc');
+    }
+
+    public function calculateProgressFor(User $user): array
+    {
+        $totalLessons = $this->lessons()->where('status', 'published')->count();
+        if ($totalLessons === 0) {
+            return [
+                'total_lessons' => 0,
+                'completed_lessons' => 0,
+                'percentage' => 0,
+            ];
+        }
+
+        $completedLessons = LessonProgress::where('course_id', $this->id)
+            ->where('user_id', $user->id)
+            ->where('is_completed', true)
+            ->count();
+
+        $percentage = (int) round(($completedLessons / $totalLessons) * 100);
+
+        return [
+            'total_lessons' => $totalLessons,
+            'completed_lessons' => $completedLessons,
+            'percentage' => min(100, $percentage),
+        ];
+    }
+
     public function isTaughtBy(User $user): bool
     {
         return $this->teacherUsers()->where('users.id', $user->id)->exists();
