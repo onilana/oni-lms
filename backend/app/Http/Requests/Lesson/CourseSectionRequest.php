@@ -13,8 +13,13 @@ class CourseSectionRequest extends FormRequest
             return false;
         }
 
-        $course = $this->route('course');
-        if ($course && ($course->isTaughtBy($user) || $user->hasPermission('lessons.manage') || $user->isSuperAdmin())) {
+        $section = $this->route('section');
+        $course = $section?->course ?? $this->route('course');
+        if ($course && (
+            $course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('lessons.manage') && ! $user->hasRole('teacher'))
+        )) {
             return true;
         }
 

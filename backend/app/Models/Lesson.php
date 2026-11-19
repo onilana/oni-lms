@@ -54,26 +54,18 @@ class Lesson extends Model
 
     public function isAccessibleBy(?User $user): bool
     {
+        if ($user && ($user->isSuperAdmin() || $this->course->isTaughtBy($user))) {
+            return true;
+        }
+
+        if ($this->status !== 'published') {
+            return false;
+        }
+
         if ($this->is_free_preview) {
             return true;
         }
 
-        if (! $user) {
-            return false;
-        }
-
-        if ($user->isSuperAdmin()) {
-            return true;
-        }
-
-        if ($this->course->isTaughtBy($user)) {
-            return true;
-        }
-
-        if ($this->course->hasStudent($user)) {
-            return true;
-        }
-
-        return false;
+        return $user !== null && $this->course->hasStudent($user);
     }
 }

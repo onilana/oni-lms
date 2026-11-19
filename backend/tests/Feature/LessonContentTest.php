@@ -8,6 +8,7 @@ use App\Models\CourseEnrolment;
 use App\Models\CourseInstructor;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\LessonProgress;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\AcademicSeeder;
@@ -183,6 +184,156 @@ class LessonContentTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('lesson_id', $previewLesson->id);
+    }
+
+    public function test_draft_lesson_content_is_not_accessible_to_students_even_as_preview(): void
+    {
+        $section = \App\Models\CourseSection::where('course_id', $this->course->id)->firstOrFail();
+        $lesson = Lesson::create([
+            'course_id' => $this->course->id,
+            'section_id' => $section->id,
+            'title' => 'Draft preview lesson',
+            'type' => 'text',
+            'content' => 'Unpublished content',
+            'is_free_preview' => true,
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($this->enrolledStudent)
+            ->getJson('/api/v1/lessons/'.$lesson->id.'/access')
+            ->assertForbidden();
+
+        $this->actingAs($this->enrolledStudent)
+            ->getJson('/api/v1/lessons/'.$lesson->id)
+            ->assertOk()
+            ->assertJsonPath('lesson.is_accessible', false)
+            ->assertJsonPath('lesson.content', null);
+
+        $sectionResponse = $this->actingAs($this->nonEnrolledStudent)
+            ->getJson("/api/v1/courses/{$this->course->id}/sections/{$section->id}")
+            ->assertOk();
+        $serializedLesson = collect($sectionResponse->json('section.lessons'))
+            ->firstWhere('id', $lesson->id);
+
+        $this->assertFalse($serializedLesson['is_accessible']);
+        $this->assertNull($serializedLesson['content']);
+        $this->assertNull($serializedLesson['video_url']);
+        $this->assertNull($serializedLesson['attachment_path']);
+        $this->assertNull($serializedLesson['attachment_name']);
+    }
+
+    public function test_students_cannot_delete_lessons(): void
+    {
+        $lesson = Lesson::firstOrFail();
+
+        $this->actingAs($this->enrolledStudent)
+            ->deleteJson('/api/v1/lessons/'.$lesson->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('lessons', ['id' => $lesson->id]);
+
+        $otherCourse = Course::where('id', '!=', $this->course->id)->firstOrFail();
+        $otherSection = CourseSection::create([
+            'course_id' => $otherCourse->id,
+            'title' => 'Unmanaged course section',
+        ]);
+        $otherLesson = Lesson::create([
+            'course_id' => $otherCourse->id,
+            'section_id' => $otherSection->id,
+            'title' => 'Unmanaged lesson',
+        ]);
+
+        $this->actingAs($this->teacher)
+            ->deleteJson('/api/v1/lessons/'.$otherLesson->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('lessons', ['id' => $otherLesson->id]);
+    }
+
+    public function test_course_section_deletion_requires_management_access_and_matching_course(): void
+    {
+        $section = CourseSection::where('course_id', $this->course->id)->firstOrFail();
+
+        $this->actingAs($this->enrolledStudent)
+            ->deleteJson("/api/v1/courses/{$this->course->id}/sections/{$section->id}")
+            ->assertForbidden();
+
+        $otherCourse = Course::where('id', '!=', $this->course->id)->firstOrFail();
+        $this->actingAs($this->teacher)
+            ->deleteJson("/api/v1/courses/{$otherCourse->id}/sections/{$section->id}")
+            ->assertNotFound();
+
+        $otherSection = CourseSection::create([
+            'course_id' => $otherCourse->id,
+            'title' => 'Unmanaged section',
+        ]);
+        $this->actingAs($this->teacher)
+            ->deleteJson("/api/v1/courses/{$otherCourse->id}/sections/{$otherSection->id}")
+            ->assertForbidden();
+
+        $this->actingAs($this->teacher)
+            ->deleteJson("/api/v1/courses/{$this->course->id}/sections/{$section->id}")
+            ->assertOk();
+
+        $this->assertDatabaseMissing('course_sections', ['id' => $section->id]);
+    }
+
+    public function test_section_update_authorizes_the_bound_sections_course(): void
+    {
+        $otherCourse = Course::where('id', '!=', $this->course->id)->firstOrFail();
+        $section = CourseSection::create([
+            'course_id' => $otherCourse->id,
+            'title' => 'Other course section',
+        ]);
+
+        $this->actingAs($this->teacher)
+            ->putJson("/api/v1/courses/{$this->course->id}/sections/{$section->id}", [
+                'title' => 'Unauthorized update',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('course_sections', [
+            'id' => $section->id,
+            'title' => 'Other course section',
+        ]);
+    }
+
+    public function test_course_completion_ignores_draft_lessons(): void
+    {
+        $section = CourseSection::where('course_id', $this->course->id)->firstOrFail();
+        $publishedLesson = Lesson::create([
+            'course_id' => $this->course->id,
+            'section_id' => $section->id,
+            'title' => 'Published progress lesson',
+            'status' => 'published',
+        ]);
+        $draftLesson = Lesson::create([
+            'course_id' => $this->course->id,
+            'section_id' => $section->id,
+            'title' => 'Draft progress lesson',
+            'status' => 'draft',
+        ]);
+
+        LessonProgress::create([
+            'course_id' => $this->course->id,
+            'lesson_id' => $publishedLesson->id,
+            'user_id' => $this->enrolledStudent->id,
+            'is_completed' => true,
+        ]);
+        LessonProgress::create([
+            'course_id' => $this->course->id,
+            'lesson_id' => $draftLesson->id,
+            'user_id' => $this->enrolledStudent->id,
+            'is_completed' => true,
+        ]);
+
+        $progress = $this->course->calculateProgressFor($this->enrolledStudent);
+
+        $this->assertSame(
+            Lesson::where('course_id', $this->course->id)->where('status', 'published')->count(),
+            $progress['total_lessons']
+        );
+        $this->assertSame(1, $progress['completed_lessons']);
     }
 
     public function test_enrolled_student_can_mark_lesson_as_completed_and_track_progress(): void

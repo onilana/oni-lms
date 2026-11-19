@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Award,
@@ -38,6 +38,7 @@ export const AssignmentsView: React.FC = () => {
   // Teacher grading modal
   const [gradingAssignment, setGradingAssignment] = useState<Assignment | null>(null);
   const [submissionsList, setSubmissionsList] = useState<AssignmentSubmission[]>([]);
+  const [loadingSubmissions, setLoadingSubmissions] = useState(false);
   const [activeSubmissionToGrade, setActiveSubmissionToGrade] = useState<AssignmentSubmission | null>(null);
   const [gradeScore, setGradeScore] = useState(0);
   const [gradeFeedback, setGradeFeedback] = useState('');
@@ -52,16 +53,26 @@ export const AssignmentsView: React.FC = () => {
   const [createMaxScore, setCreateMaxScore] = useState(100);
   const [createType, setCreateType] = useState<'text' | 'file' | 'both'>('both');
 
-  const fetchAssignments = async () => {
+  const selectedCourseIdRef = useRef(selectedCourseId);
+  selectedCourseIdRef.current = selectedCourseId;
+  const assignmentLoadIdRef = useRef(0);
+  const gradingSessionIdRef = useRef(0);
+  const gradingAssignmentIdRef = useRef<string | null>(null);
+
+  const fetchAssignments = async (courseId = selectedCourseId) => {
+    const requestId = ++assignmentLoadIdRef.current;
+    const isCurrentRequest = () =>
+      requestId === assignmentLoadIdRef.current && courseId === selectedCourseIdRef.current;
     setLoading(true);
     setError(null);
     try {
-      const url = selectedCourseId ? `/courses/${selectedCourseId}/assignments` : '/assignments';
+      const url = courseId ? `/courses/${courseId}/assignments` : '/assignments';
       const [assignRes, coursesRes] = await Promise.all([
         apiRequest<{ assignments: Assignment[] }>(url),
         apiRequest<{ courses: Course[] }>('/courses'),
       ]);
 
+      if (!isCurrentRequest()) return;
       setAssignments(assignRes.assignments);
       setCourses(coursesRes.courses);
 
@@ -69,14 +80,24 @@ export const AssignmentsView: React.FC = () => {
         setCreateCourseId(coursesRes.courses[0].id);
       }
     } catch (err) {
+      if (!isCurrentRequest()) return;
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError('Failed to load assignments.');
       }
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoading(false);
     }
+  };
+
+  const selectCourse = (courseId: string) => {
+    selectedCourseIdRef.current = courseId;
+    assignmentLoadIdRef.current += 1;
+    setSelectedCourseId(courseId);
+    setAssignments([]);
+    setError(null);
+    setLoading(true);
   };
 
   useEffect(() => {
@@ -110,18 +131,53 @@ export const AssignmentsView: React.FC = () => {
   };
 
   const handleOpenGrading = async (assignment: Assignment) => {
+    const sessionId = ++gradingSessionIdRef.current;
+    gradingAssignmentIdRef.current = assignment.id;
     setGradingAssignment(assignment);
+    setSubmissionsList([]);
+    setLoadingSubmissions(true);
+    setActiveSubmissionToGrade(null);
+    setGradeScore(0);
+    setGradeFeedback('');
     try {
       const res = await apiRequest<{ submissions: AssignmentSubmission[] }>(
         `/assignments/${assignment.id}/submissions`
       );
+      if (
+        sessionId !== gradingSessionIdRef.current ||
+        gradingAssignmentIdRef.current !== assignment.id
+      ) return;
       setSubmissionsList(res.submissions);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error fetching submissions');
+      if (
+        sessionId === gradingSessionIdRef.current &&
+        gradingAssignmentIdRef.current === assignment.id
+      ) {
+        alert(err instanceof Error ? err.message : 'Error fetching submissions');
+      }
+    } finally {
+      if (
+        sessionId === gradingSessionIdRef.current &&
+        gradingAssignmentIdRef.current === assignment.id
+      ) {
+        setLoadingSubmissions(false);
+      }
     }
   };
 
+  const closeGrading = () => {
+    gradingSessionIdRef.current += 1;
+    gradingAssignmentIdRef.current = null;
+    setGradingAssignment(null);
+    setSubmissionsList([]);
+    setLoadingSubmissions(false);
+    setActiveSubmissionToGrade(null);
+    setGradeScore(0);
+    setGradeFeedback('');
+  };
+
   const handleSelectSubmissionToGrade = (sub: AssignmentSubmission) => {
+    if (!gradingAssignment || sub.assignment_id !== gradingAssignment.id) return;
     setActiveSubmissionToGrade(sub);
     setGradeScore(sub.score ?? 0);
     setGradeFeedback(sub.feedback ?? '');
@@ -129,10 +185,18 @@ export const AssignmentsView: React.FC = () => {
 
   const handleSaveGrade = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeSubmissionToGrade || !gradingAssignment) return;
+    if (
+      !activeSubmissionToGrade ||
+      !gradingAssignment ||
+      activeSubmissionToGrade.assignment_id !== gradingAssignment.id ||
+      gradingAssignmentIdRef.current !== gradingAssignment.id
+    ) return;
+    const assignmentId = gradingAssignment.id;
+    const submissionId = activeSubmissionToGrade.id;
+    const sessionId = gradingSessionIdRef.current;
 
     try {
-      await apiRequest(`/submissions/${activeSubmissionToGrade.id}/grade`, {
+      await apiRequest(`/submissions/${submissionId}/grade`, {
         method: 'POST',
         body: JSON.stringify({
           score: gradeScore,
@@ -143,14 +207,32 @@ export const AssignmentsView: React.FC = () => {
 
       // Refresh submissions
       const res = await apiRequest<{ submissions: AssignmentSubmission[] }>(
-        `/assignments/${gradingAssignment.id}/submissions`
+        `/assignments/${assignmentId}/submissions`
       );
+      if (
+        sessionId !== gradingSessionIdRef.current ||
+        gradingAssignmentIdRef.current !== assignmentId
+      ) return;
       setSubmissionsList(res.submissions);
+      setLoadingSubmissions(false);
       setActiveSubmissionToGrade(null);
       await fetchAssignments();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error saving grade');
+      if (
+        sessionId === gradingSessionIdRef.current &&
+        gradingAssignmentIdRef.current === assignmentId
+      ) {
+        alert(err instanceof Error ? err.message : 'Error saving grade');
+      }
     }
+  };
+
+  const localDateTimeToUtc = (value: string) => {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) {
+      throw new Error('Enter a valid assignment due date and time.');
+    }
+    return date.toISOString();
   };
 
   const handleCreateAssignment = async (e: React.FormEvent) => {
@@ -162,7 +244,7 @@ export const AssignmentsView: React.FC = () => {
           title: createTitle,
           description: createDesc,
           instructions: createInstructions,
-          due_date: createDueDate,
+          due_date: localDateTimeToUtc(createDueDate),
           max_score: createMaxScore,
           submission_type: createType,
           status: 'published',
@@ -188,7 +270,7 @@ export const AssignmentsView: React.FC = () => {
           <p>Complete course tasks, review teacher feedback, and grade student submissions</p>
         </div>
         <div className="view-actions">
-          <button className="btn btn-secondary" onClick={fetchAssignments} title="Refresh assignments">
+          <button className="btn btn-secondary" onClick={() => fetchAssignments()} title="Refresh assignments">
             <RefreshCw size={15} className={loading ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
@@ -204,7 +286,7 @@ export const AssignmentsView: React.FC = () => {
       {error && <div className="alert alert-error">{error}</div>}
 
       <div className="assignments-toolbar">
-        <select value={selectedCourseId} onChange={(e) => setSelectedCourseId(e.target.value)}>
+        <select value={selectedCourseId} onChange={(e) => selectCourse(e.target.value)}>
           <option value="">All Course Assignments</option>
           {courses.map((c) => (
             <option key={c.id} value={c.id}>{c.code}: {c.title}</option>
@@ -312,7 +394,7 @@ export const AssignmentsView: React.FC = () => {
                 <label>Text Response / Solution Notes</label>
                 <textarea
                   rows={6}
-                  required
+                  required={submittingAssignment.submission_type === 'text' || submittingAssignment.submission_type === 'both'}
                   placeholder="Paste your implementation source code, written explanation, or repository URL..."
                   value={submissionText}
                   onChange={(e) => setSubmissionText(e.target.value)}
@@ -339,7 +421,7 @@ export const AssignmentsView: React.FC = () => {
 
       {/* Teacher Grading Modal */}
       {gradingAssignment && (
-        <div className="modal-backdrop" onClick={() => setGradingAssignment(null)}>
+        <div className="modal-backdrop" onClick={closeGrading}>
           <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div>
@@ -347,7 +429,7 @@ export const AssignmentsView: React.FC = () => {
                 <h3>Submissions: {gradingAssignment.title}</h3>
                 <small>Max Score: {gradingAssignment.max_score} Points</small>
               </div>
-              <button className="btn-close" onClick={() => setGradingAssignment(null)}><X size={18} /></button>
+              <button className="btn-close" onClick={closeGrading}><X size={18} /></button>
             </div>
 
             <div className="grading-modal-body">
@@ -367,6 +449,16 @@ export const AssignmentsView: React.FC = () => {
                     <small>Submitted at {new Date(activeSubmissionToGrade.submitted_at).toLocaleString()}</small>
                     <div className="submission-content-box">
                       <pre>{activeSubmissionToGrade.submission_text || 'No text provided.'}</pre>
+                      {activeSubmissionToGrade.attachment_path && (
+                        <a
+                          href={activeSubmissionToGrade.attachment_path}
+                          target="_blank"
+                          rel="noreferrer"
+                          download={activeSubmissionToGrade.attachment_name ?? undefined}
+                        >
+                          {activeSubmissionToGrade.attachment_name ?? 'Open attachment'}
+                        </a>
+                      )}
                     </div>
                   </div>
 
@@ -396,6 +488,10 @@ export const AssignmentsView: React.FC = () => {
                     Save & Publish Grade
                   </button>
                 </form>
+              ) : loadingSubmissions ? (
+                <div className="empty-state">
+                  <p>Loading submissions...</p>
+                </div>
               ) : submissionsList.length === 0 ? (
                 <div className="empty-state">
                   <p>No student submissions received yet for this assignment.</p>

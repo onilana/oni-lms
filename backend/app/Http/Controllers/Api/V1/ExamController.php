@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\Exam;
 use App\Models\ExamQuestion;
 use App\Models\Question;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -18,7 +19,7 @@ class ExamController
     public function index(Request $request, Course $course): AnonymousResourceCollection
     {
         $user = $request->user();
-        $isTeacherOrAdmin = $user && ($course->isTaughtBy($user) || $user->hasPermission('exams.manage') || $user->isSuperAdmin());
+        $isTeacherOrAdmin = $user && $this->canManage($course, $user);
 
         $query = $course->exams();
         if (!$isTeacherOrAdmin) {
@@ -32,6 +33,10 @@ class ExamController
 
     public function show(Request $request, Exam $exam): ExamResource
     {
+        if (! $exam->is_published && ! $this->canManage($exam->course, $request->user())) {
+            abort(404);
+        }
+
         $exam->load('questions');
         return new ExamResource($exam);
     }
@@ -63,7 +68,7 @@ class ExamController
     public function destroy(Request $request, Exam $exam): JsonResponse
     {
         $user = $request->user();
-        if (!$exam->course->isTaughtBy($user) && !$user->hasPermission('exams.manage') && !$user->isSuperAdmin()) {
+        if (! $this->canManage($exam->course, $user)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -78,13 +83,15 @@ class ExamController
     {
         $questionIds = $request->validated('question_ids');
         $currentMaxOrder = $exam->questions()->max('order_index') ?? 0;
+        $nextOrder = (int) $currentMaxOrder;
 
-        foreach ($questionIds as $idx => $qId) {
+        foreach ($questionIds as $qId) {
             if (!$exam->questions()->where('questions.id', $qId)->exists()) {
+                $nextOrder++;
                 ExamQuestion::create([
                     'exam_id' => $exam->id,
                     'question_id' => $qId,
-                    'order_index' => $currentMaxOrder + $idx + 1,
+                    'order_index' => $nextOrder,
                 ]);
             }
         }
@@ -93,5 +100,12 @@ class ExamController
             'message' => 'Questions attached to exam successfully',
             'data' => new ExamResource($exam->fresh(['questions'])),
         ]);
+    }
+
+    private function canManage(Course $course, User $user): bool
+    {
+        return $course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('exams.manage') && ! $user->hasRole('teacher'));
     }
 }

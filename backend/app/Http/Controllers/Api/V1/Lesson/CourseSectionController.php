@@ -6,6 +6,7 @@ use App\Http\Requests\Lesson\CourseSectionRequest;
 use App\Http\Resources\Lesson\CourseSectionResource;
 use App\Models\Course;
 use App\Models\CourseSection;
+use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -39,6 +40,8 @@ class CourseSectionController
 
     public function show(Course $course, CourseSection $section): JsonResponse
     {
+        abort_unless($section->course_id === $course->id, 404);
+
         $section->load('lessons');
 
         return response()->json([
@@ -48,6 +51,8 @@ class CourseSectionController
 
     public function update(CourseSectionRequest $request, Course $course, CourseSection $section): JsonResponse
     {
+        abort_unless($section->course_id === $course->id, 404);
+
         $section->update($request->validated());
         $section->load('lessons');
 
@@ -57,8 +62,19 @@ class CourseSectionController
         ]);
     }
 
-    public function destroy(Course $course, CourseSection $section): JsonResponse
+    public function destroy(Request $request, Course $course, CourseSection $section): JsonResponse
     {
+        abort_unless($section->course_id === $course->id, 404);
+
+        $user = $request->user();
+        if (
+            ! $course->isTaughtBy($user)
+            && ! $user->isSuperAdmin()
+            && ! ($user->hasPermission('lessons.manage') && ! $user->hasRole(Role::TEACHER))
+        ) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $section->delete();
 
         return response()->json([

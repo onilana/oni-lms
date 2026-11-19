@@ -54,8 +54,8 @@ class AssignmentSubmissionController
     {
         $user = $request->user();
 
-        if ($assignment->status === 'closed') {
-            return response()->json(['message' => 'Submissions for this assignment are closed.'], 403);
+        if ($assignment->status !== 'published') {
+            return response()->json(['message' => 'Submissions for this assignment are not open.'], 403);
         }
 
         $validated = $request->validated();
@@ -71,6 +71,10 @@ class AssignmentSubmissionController
             'submitted_at' => now(),
             'status' => 'submitted',
             'is_late' => $isLate,
+            'score' => null,
+            'feedback' => null,
+            'graded_by_id' => null,
+            'graded_at' => null,
         ]);
 
         $submission->load(['user', 'grader']);

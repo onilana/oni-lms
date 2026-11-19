@@ -5,10 +5,12 @@ namespace Tests\Feature;
 use App\Models\Course;
 use App\Models\CourseEnrolment;
 use App\Models\CourseInstructor;
+use App\Models\Department;
 use App\Models\Exam;
 use App\Models\ExamAttempt;
 use App\Models\ExamQuestion;
 use App\Models\Question;
+use App\Models\QuestionBank;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\AcademicSeeder;
@@ -132,6 +134,194 @@ class ExamTest extends TestCase
         ]);
     }
 
+    public function test_question_bank_scope_is_checked_for_each_attached_question(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Question bank scope exam',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+            'is_published' => true,
+        ]);
+        $otherDepartment = Department::where('id', '!=', $this->course->department_id)->firstOrFail();
+        $restrictedBank = QuestionBank::create([
+            'department_id' => $otherDepartment->id,
+            'title' => 'Restricted bank',
+            'created_by' => $this->teacher->id,
+        ]);
+        $restrictedQuestion = Question::create([
+            'question_bank_id' => $restrictedBank->id,
+            'question_text' => 'Restricted question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'a', 'text' => 'A']],
+            'correct_answers' => ['a'],
+            'created_by' => $this->teacher->id,
+        ]);
+        $sharedBank = QuestionBank::create([
+            'department_id' => null,
+            'title' => 'Shared question bank',
+            'created_by' => $this->teacher->id,
+        ]);
+        $sharedQuestion = Question::create([
+            'question_bank_id' => $sharedBank->id,
+            'question_text' => 'Shared question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'a', 'text' => 'A']],
+            'correct_answers' => ['a'],
+            'created_by' => $this->teacher->id,
+        ]);
+
+        $this->actingAs($this->teacher)
+            ->postJson("/api/v1/exams/{$exam->id}/questions", [
+                'question_ids' => [$sharedQuestion->id, $restrictedQuestion->id],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['question_ids.1']);
+
+        $this->actingAs($this->teacher)
+            ->postJson("/api/v1/exams/{$exam->id}/questions", [
+                'question_ids' => [$sharedQuestion->id],
+            ])
+            ->assertOk();
+    }
+
+    public function test_question_solutions_are_hidden_from_teacher_roles_outside_the_exam_course(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Course-scoped solutions',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+            'is_published' => true,
+        ]);
+        $question = Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => 'Course-scoped question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'a', 'text' => 'A']],
+            'correct_answers' => ['a'],
+            'created_by' => $this->teacher->id,
+        ]);
+        ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'question_id' => $question->id,
+            'order_index' => 1,
+        ]);
+
+        $otherTeacher = User::factory()->create();
+        $otherTeacher->roles()->attach([
+            Role::where('name', Role::TEACHER)->value('id'),
+            Role::where('name', Role::STUDENT)->value('id'),
+        ]);
+        CourseEnrolment::create([
+            'course_id' => $this->course->id,
+            'user_id' => $otherTeacher->id,
+            'academic_session_id' => $this->course->department->programmes()->first()->batches()->first()?->academic_session_id,
+            'status' => 'active',
+            'enrolled_at' => now(),
+        ]);
+
+        $this->actingAs($otherTeacher)
+            ->getJson("/api/v1/exams/{$exam->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('data.questions.0.correct_answers');
+    }
+
+    public function test_single_choice_correct_answer_must_reference_an_option(): void
+    {
+        $this->actingAs($this->teacher)
+            ->postJson('/api/v1/questions', [
+                'course_id' => $this->course->id,
+                'question_text' => 'Invalid correct option',
+                'question_type' => 'mcq_single',
+                'options' => [['id' => 'a', 'text' => 'A']],
+                'correct_answers' => ['not-an-option'],
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['correct_answers']);
+    }
+
+    public function test_teacher_cannot_update_or_delete_a_question_from_another_course(): void
+    {
+        $otherCourse = Course::where('id', '!=', $this->course->id)->firstOrFail();
+        $question = Question::create([
+            'course_id' => $otherCourse->id,
+            'question_text' => 'Another course question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'a', 'text' => 'A']],
+            'correct_answers' => ['a'],
+            'created_by' => $this->teacher->id,
+        ]);
+
+        $this->actingAs($this->teacher)
+            ->putJson("/api/v1/questions/{$question->id}", [
+                'course_id' => $otherCourse->id,
+                'question_text' => 'Changed by unrelated teacher',
+                'question_type' => 'mcq_single',
+                'options' => [['id' => 'a', 'text' => 'A']],
+                'correct_answers' => ['a'],
+            ])
+            ->assertForbidden();
+
+        $this->actingAs($this->teacher)
+            ->deleteJson("/api/v1/questions/{$question->id}")
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('questions', ['id' => $question->id]);
+    }
+
+    public function test_question_exam_relation_generates_pivot_uuid_when_attaching(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Pivot UUID exam',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+        ]);
+        $question = Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => 'Question with pivot UUID',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'a', 'text' => 'A']],
+            'correct_answers' => ['a'],
+        ]);
+
+        $question->exams()->attach($exam->id, ['order_index' => 1]);
+
+        $pivotId = ExamQuestion::where('exam_id', $exam->id)->value('id');
+        $this->assertNotEmpty($pivotId);
+        $this->assertMatchesRegularExpression('/^[0-9a-f-]{36}$/i', $pivotId);
+    }
+
+    public function test_attached_question_order_uses_numeric_iteration_not_array_keys(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Question order exam',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+        ]);
+        $questions = collect([1, 2])->map(fn (int $number) => Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => "Question {$number}",
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'a', 'text' => 'A']],
+            'correct_answers' => ['a'],
+            'created_by' => $this->teacher->id,
+        ]));
+
+        $this->actingAs($this->teacher)
+            ->postJson("/api/v1/exams/{$exam->id}/questions", [
+                'question_ids' => [3 => $questions[0]->id, 8 => $questions[1]->id],
+            ])
+            ->assertOk();
+
+        $this->assertSame(
+            [1, 2],
+            ExamQuestion::where('exam_id', $exam->id)->orderBy('order_index')->pluck('order_index')->all()
+        );
+    }
+
     public function test_student_cannot_see_correct_answers_in_exam(): void
     {
         $exam = Exam::create([
@@ -169,6 +359,30 @@ class ExamTest extends TestCase
         // Assert student response does NOT leak correct_answers or explanation
         $this->assertNull($response->json('data.questions.0.correct_answers'));
         $this->assertNull($response->json('data.questions.0.explanation'));
+
+        $this->actingAs($this->teacher)
+            ->getJson("/api/v1/exams/{$exam->id}")
+            ->assertOk()
+            ->assertJsonPath('data.questions.0.correct_answers', ['a']);
+    }
+
+    public function test_student_cannot_view_unpublished_exam_directly(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Draft exam',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+            'is_published' => false,
+        ]);
+
+        $this->actingAs($this->student)
+            ->getJson("/api/v1/exams/{$exam->id}")
+            ->assertNotFound();
+
+        $this->actingAs($this->teacher)
+            ->getJson("/api/v1/exams/{$exam->id}")
+            ->assertOk();
     }
 
     public function test_student_can_start_exam_and_autosave_progress(): void
@@ -201,6 +415,24 @@ class ExamTest extends TestCase
 
         $saveRes->assertStatus(200)
             ->assertJsonPath('message', 'Attempt progress autosaved');
+
+        $this->actingAs($this->student)
+            ->postJson("/api/v1/attempts/{$attemptId}/save", [
+                'answers' => ['q3' => 'c'],
+            ])
+            ->assertOk();
+
+        $this->assertSame(
+            ['q1' => 'a', 'q2' => ['b', 'c'], 'q3' => 'c'],
+            ExamAttempt::findOrFail($attemptId)->answers_snapshot
+        );
+
+        $resumed = $this->actingAs($this->student)
+            ->postJson("/api/v1/exams/{$exam->id}/start");
+        $resumed->assertOk()
+            ->assertJsonPath('attempt.id', $attemptId);
+
+        $this->assertSame(1, ExamAttempt::where('exam_id', $exam->id)->where('user_id', $this->student->id)->count());
 
         $this->assertDatabaseHas('exam_attempts', [
             'id' => $attemptId,
@@ -284,6 +516,69 @@ class ExamTest extends TestCase
         $resubmit->assertStatus(200);
     }
 
+    public function test_submission_merges_saved_answers_and_uses_start_time_grading_snapshot(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Snapshot grading test',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+            'is_published' => true,
+        ]);
+        $q1 = Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => 'First question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'right', 'text' => 'Right'], ['id' => 'wrong', 'text' => 'Wrong']],
+            'correct_answers' => ['right'],
+            'points' => 2,
+            'created_by' => $this->teacher->id,
+        ]);
+        $q2 = Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => 'Second question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'yes', 'text' => 'Yes']],
+            'correct_answers' => ['yes'],
+            'points' => 1,
+            'created_by' => $this->teacher->id,
+        ]);
+        ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'question_id' => $q1->id,
+            'order_index' => 1,
+            'points' => 2,
+        ]);
+        ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'question_id' => $q2->id,
+            'order_index' => 2,
+            'points' => 1,
+        ]);
+
+        $attemptId = $this->actingAs($this->student)
+            ->postJson("/api/v1/exams/{$exam->id}/start")
+            ->assertCreated()
+            ->json('attempt.id');
+
+        $this->actingAs($this->student)
+            ->postJson("/api/v1/attempts/{$attemptId}/save", [
+                'answers' => [$q1->id => 'right'],
+            ])
+            ->assertOk();
+
+        $q1->update(['correct_answers' => ['wrong'], 'points' => 10]);
+        $exam->questions()->updateExistingPivot($q1->id, ['points' => 7]);
+
+        $this->actingAs($this->student)
+            ->postJson("/api/v1/attempts/{$attemptId}/submit", [
+                'answers' => [$q2->id => 'yes'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.score', 3)
+            ->assertJsonPath('data.answers_snapshot.'.$q1->id, 'right');
+    }
+
     public function test_expired_attempt_is_blocked_from_autosave(): void
     {
         $exam = Exam::create([
@@ -310,6 +605,89 @@ class ExamTest extends TestCase
 
         $response->assertStatus(410)
             ->assertJsonPath('is_expired', true);
+    }
+
+    public function test_expired_attempt_submission_uses_only_saved_answers(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Expired submission exam',
+            'duration_minutes' => 10,
+            'created_by' => $this->teacher->id,
+            'is_published' => true,
+        ]);
+        $question = Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => 'Pick the correct answer',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'right', 'text' => 'Right']],
+            'correct_answers' => ['right'],
+            'created_by' => $this->teacher->id,
+        ]);
+        ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'question_id' => $question->id,
+            'order_index' => 1,
+        ]);
+        $attempt = ExamAttempt::create([
+            'exam_id' => $exam->id,
+            'user_id' => $this->student->id,
+            'attempt_number' => 1,
+            'started_at' => now()->subMinutes(20),
+            'expires_at' => now()->subMinutes(10),
+            'status' => 'in_progress',
+            'answers_snapshot' => [$question->id => 'wrong'],
+        ]);
+
+        $this->actingAs($this->student)
+            ->postJson("/api/v1/attempts/{$attempt->id}/submit", [
+                'answers' => [$question->id => 'right'],
+            ])
+            ->assertStatus(410)
+            ->assertJsonPath('is_expired', true)
+            ->assertJsonPath('data.score', 0)
+            ->assertJsonPath('data.answers_snapshot.'.$question->id, 'wrong');
+    }
+
+    public function test_ungraded_submitted_attempt_can_recover_from_saved_answers(): void
+    {
+        $exam = Exam::create([
+            'course_id' => $this->course->id,
+            'title' => 'Submitted recovery exam',
+            'duration_minutes' => 30,
+            'created_by' => $this->teacher->id,
+            'is_published' => true,
+        ]);
+        $question = Question::create([
+            'course_id' => $this->course->id,
+            'question_text' => 'Recovery question',
+            'question_type' => 'mcq_single',
+            'options' => [['id' => 'right', 'text' => 'Right']],
+            'correct_answers' => ['right'],
+            'created_by' => $this->teacher->id,
+        ]);
+        ExamQuestion::create([
+            'exam_id' => $exam->id,
+            'question_id' => $question->id,
+            'order_index' => 1,
+        ]);
+        $attemptId = $this->actingAs($this->student)
+            ->postJson("/api/v1/exams/{$exam->id}/start")
+            ->assertCreated()
+            ->json('attempt.id');
+        ExamAttempt::findOrFail($attemptId)->update([
+            'status' => 'submitted',
+            'answers_snapshot' => [$question->id => 'right'],
+        ]);
+
+        $this->actingAs($this->student)
+            ->postJson("/api/v1/attempts/{$attemptId}/submit", [
+                'answers' => [$question->id => 'wrong'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('data.status', 'evaluated')
+            ->assertJsonPath('data.score', 1)
+            ->assertJsonPath('data.answers_snapshot.'.$question->id, 'right');
     }
 
     public function test_max_attempts_limit_enforced(): void

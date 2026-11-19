@@ -265,6 +265,21 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
                   >
                     <BookOpen size={13} /> Lessons Player
                   </button>
+                ) : user ? (
+                  <>
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => onOpenLearning(c.id)}
+                    >
+                      <BookOpen size={13} /> Preview Lessons
+                    </button>
+                    <button
+                      className="btn btn-primary btn-sm"
+                      onClick={() => handleEnroll(c.id)}
+                    >
+                      Enroll Now
+                    </button>
+                  </>
                 ) : (
                   <button
                     className="btn btn-primary btn-sm"

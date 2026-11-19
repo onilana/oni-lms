@@ -51,6 +51,7 @@ class Question extends Model
     public function exams(): BelongsToMany
     {
         return $this->belongsToMany(Exam::class, 'exam_questions')
+            ->using(ExamQuestion::class)
             ->withPivot('id', 'order_index', 'points')
             ->withTimestamps();
     }

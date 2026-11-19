@@ -6,7 +6,7 @@ use App\Http\Requests\Assignment\AssignmentRequest;
 use App\Http\Resources\Assignment\AssignmentResource;
 use App\Models\Assignment;
 use App\Models\Course;
-use App\Models\Role;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -23,11 +23,18 @@ class AssignmentController
             $query->where('course_id', $course->id);
         }
 
-        $isStaff = $user?->hasRole([Role::SUPER_ADMIN, Role::COLLEGE_ADMIN, Role::DEPT_ADMIN, Role::TEACHER]);
+        $hasGlobalManagement = $user && (
+            $user->isSuperAdmin()
+            || ($user->hasPermission('assignments.manage') && ! $user->hasRole('teacher'))
+        );
 
-        // If student or guest, only return published assignments
-        if (! $isStaff) {
-            $query->where('status', 'published');
+        if (! $hasGlobalManagement) {
+            $query->where(function ($query) use ($user): void {
+                $query->where('status', 'published');
+                if ($user) {
+                    $query->orWhereHas('course.teacherUsers', fn ($instructors) => $instructors->where('users.id', $user->id));
+                }
+            });
         }
 
         $assignments = $query->orderBy('due_date')->get();
@@ -52,8 +59,12 @@ class AssignmentController
         ], 201);
     }
 
-    public function show(Assignment $assignment): JsonResponse
+    public function show(Request $request, Assignment $assignment): JsonResponse
     {
+        if ($assignment->status !== 'published' && ! $this->canManageCourse($assignment->course, $request->user())) {
+            abort(404);
+        }
+
         $assignment->load(['course.department', 'section'])->loadCount('submissions');
 
         return response()->json([
@@ -72,12 +83,33 @@ class AssignmentController
         ]);
     }
 
-    public function destroy(Assignment $assignment): JsonResponse
+    public function destroy(Request $request, Assignment $assignment): JsonResponse
     {
+        if (! $this->canManage($assignment, $request->user())) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $assignment->delete();
 
         return response()->json([
             'message' => 'Assignment deleted successfully.',
         ]);
+    }
+
+    private function canManageCourse(Course $course, ?User $user): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        return $course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('assignments.manage') && ! $user->hasRole('teacher'));
+    }
+
+    private function canManage(Assignment $assignment, User $user): bool
+    {
+        return $assignment->course->isTaughtBy($user)
+            || $user->hasPermission('assignments.delete');
     }
 }

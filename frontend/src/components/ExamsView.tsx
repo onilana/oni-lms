@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   AlertCircle,
   Award,
@@ -34,6 +34,7 @@ export const ExamsView: React.FC = () => {
   const [activeExam, setActiveExam] = useState<Exam | null>(null);
   const [activeAttempt, setActiveAttempt] = useState<ExamAttempt | null>(null);
   const [activeQuestions, setActiveQuestions] = useState<Question[]>([]);
+  const [attemptResponseTiming, setAttemptResponseTiming] = useState<{ requestedAt: number; receivedAt: number } | null>(null);
   const [startingExam, setStartingExam] = useState(false);
 
   // Teacher create exam modal
@@ -59,6 +60,10 @@ export const ExamsView: React.FC = () => {
   const [qOptC, setQOptC] = useState('');
   const [qOptD, setQOptD] = useState('');
   const [qCorrectChoice, setQCorrectChoice] = useState('a');
+  const [qCorrectChoices, setQCorrectChoices] = useState<string[]>(['a']);
+  const selectedCourseIdRef = useRef(selectedCourseId);
+  selectedCourseIdRef.current = selectedCourseId;
+  const examsLoadIdRef = useRef(0);
 
   // Load courses
   useEffect(() => {
@@ -86,21 +91,36 @@ export const ExamsView: React.FC = () => {
   }, [selectedCourseId]);
 
   const loadExams = async (courseId: string) => {
+    const requestId = ++examsLoadIdRef.current;
+    const isCurrentRequest = () =>
+      requestId === examsLoadIdRef.current && courseId === selectedCourseIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const res = await apiRequest<{ data: Exam[] }>(`/courses/${courseId}/exams`);
+      if (!isCurrentRequest()) return;
       setExams(res.data);
     } catch (err: any) {
+      if (!isCurrentRequest()) return;
       setError(err.message || 'Failed to load examinations');
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoading(false);
     }
+  };
+
+  const selectCourse = (courseId: string) => {
+    selectedCourseIdRef.current = courseId;
+    examsLoadIdRef.current += 1;
+    setSelectedCourseId(courseId);
+    setExams([]);
+    setError(null);
+    setLoading(!!courseId);
   };
 
   const handleStartExam = async (exam: Exam) => {
     try {
       setStartingExam(true);
+      const requestedAt = Date.now();
       const res = await apiRequest<{
         message: string;
         attempt: ExamAttempt;
@@ -108,10 +128,12 @@ export const ExamsView: React.FC = () => {
       }>(`/exams/${exam.id}/start`, {
         method: 'POST',
       });
+      const receivedAt = Date.now();
 
       setActiveExam(exam);
       setActiveAttempt(res.attempt);
       setActiveQuestions(res.questions);
+      setAttemptResponseTiming({ requestedAt, receivedAt });
     } catch (err: any) {
       alert(err.message || 'Could not start examination');
     } finally {
@@ -143,7 +165,7 @@ export const ExamsView: React.FC = () => {
       if (selectedCourseId === createCourseId) {
         loadExams(selectedCourseId);
       } else {
-        setSelectedCourseId(createCourseId);
+        selectCourse(createCourseId);
       }
     } catch (err: any) {
       alert(err.message || 'Failed to create exam');
@@ -162,15 +184,32 @@ export const ExamsView: React.FC = () => {
         { id: 'a', text: qOptA },
         { id: 'b', text: qOptB },
       ];
-      if (qOptC) options.push({ id: 'c', text: qOptC });
-      if (qOptD) options.push({ id: 'd', text: qOptD });
+      if (qOptC.trim()) options.push({ id: 'c', text: qOptC });
+      if (qOptD.trim()) options.push({ id: 'd', text: qOptD });
+      const optionIds = new Set(options.map((option) => option.id));
+      correctAnswers = qType === 'mcq_multiple' ? qCorrectChoices : [qCorrectChoice];
+      if (
+        correctAnswers.length === 0 ||
+        correctAnswers.some((answer) => !optionIds.has(answer))
+      ) {
+        alert('Select at least one correct answer from the current options.');
+        return;
+      }
     } else if (qType === 'true_false') {
       options = [
         { id: 'true', text: 'True' },
         { id: 'false', text: 'False' },
       ];
+      if (!['true', 'false'].includes(qCorrectChoice)) {
+        alert('Select a valid True/False answer.');
+        return;
+      }
     } else if (qType === 'short_answer') {
       correctAnswers = [qCorrectChoice.trim()];
+      if (!correctAnswers[0]) {
+        alert('Enter the expected short answer.');
+        return;
+      }
     }
 
     try {
@@ -204,7 +243,9 @@ export const ExamsView: React.FC = () => {
       setQOptC('');
       setQOptD('');
       setQExplanation('');
-      loadExams(selectedCourseId);
+      if (selectedCourseIdRef.current === targetExam.course_id) {
+        loadExams(targetExam.course_id);
+      }
     } catch (err: any) {
       alert(err.message || 'Failed to add question');
     }
@@ -224,7 +265,7 @@ export const ExamsView: React.FC = () => {
             className="form-control"
             style={{ width: '240px' }}
             value={selectedCourseId}
-            onChange={(e) => setSelectedCourseId(e.target.value)}
+            onChange={(e) => selectCourse(e.target.value)}
           >
             {courses.map((c) => (
               <option key={c.id} value={c.id}>
@@ -368,10 +409,12 @@ export const ExamsView: React.FC = () => {
           exam={activeExam}
           initialAttempt={activeAttempt}
           initialQuestions={activeQuestions}
+          initialResponseTiming={attemptResponseTiming ?? undefined}
           onClose={() => {
             setActiveExam(null);
             setActiveAttempt(null);
             setActiveQuestions([]);
+            setAttemptResponseTiming(null);
             loadExams(selectedCourseId);
           }}
           onFinished={() => {
@@ -527,7 +570,12 @@ export const ExamsView: React.FC = () => {
                   <select
                     className="form-control"
                     value={qType}
-                    onChange={(e: any) => setQType(e.target.value)}
+                    onChange={(e) => {
+                      const nextType = e.target.value as typeof qType;
+                      setQType(nextType);
+                      setQCorrectChoice(nextType === 'true_false' ? 'true' : nextType === 'short_answer' ? '' : 'a');
+                      setQCorrectChoices(['a']);
+                    }}
                   >
                     <option value="mcq_single">Single Choice (Radio)</option>
                     <option value="mcq_multiple">Multiple Choice (Checkboxes)</option>
@@ -594,19 +642,44 @@ export const ExamsView: React.FC = () => {
                       />
                     </div>
 
-                    <div className="form-group" style={{ marginTop: '10px' }}>
-                      <label>Correct Option Key</label>
-                      <select
-                        className="form-control"
-                        value={qCorrectChoice}
-                        onChange={(e) => setQCorrectChoice(e.target.value)}
-                      >
-                        <option value="a">Option A</option>
-                        <option value="b">Option B</option>
-                        {qOptC && <option value="c">Option C</option>}
-                        {qOptD && <option value="d">Option D</option>}
-                      </select>
-                    </div>
+                    {qType === 'mcq_single' ? (
+                      <div className="form-group" style={{ marginTop: '10px' }}>
+                        <label>Correct Option Key</label>
+                        <select
+                          className="form-control"
+                          value={qCorrectChoice}
+                          onChange={(e) => setQCorrectChoice(e.target.value)}
+                        >
+                          <option value="a">Option A</option>
+                          <option value="b">Option B</option>
+                          {qOptC.trim() && <option value="c">Option C</option>}
+                          {qOptD.trim() && <option value="d">Option D</option>}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="form-group" style={{ marginTop: '10px' }}>
+                        <label>Correct Option Keys</label>
+                        {[
+                          { id: 'a', text: 'Option A' },
+                          { id: 'b', text: 'Option B' },
+                          ...(qOptC.trim() ? [{ id: 'c', text: 'Option C' }] : []),
+                          ...(qOptD.trim() ? [{ id: 'd', text: 'Option D' }] : []),
+                        ].map((option) => (
+                          <label key={option.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={qCorrectChoices.includes(option.id)}
+                              onChange={(e) => setQCorrectChoices((current) =>
+                                e.target.checked
+                                  ? [...current, option.id]
+                                  : current.filter((id) => id !== option.id)
+                              )}
+                            />
+                            {option.text}
+                          </label>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 

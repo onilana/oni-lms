@@ -17,7 +17,11 @@ class LessonRequest extends FormRequest
         $lesson = $this->route('lesson');
         $course = $section?->course ?? $lesson?->course;
 
-        if ($course && ($course->isTaughtBy($user) || $user->hasPermission('lessons.manage') || $user->isSuperAdmin())) {
+        if ($course && (
+            $course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('lessons.manage') && ! $user->hasRole('teacher'))
+        )) {
             return true;
         }
 

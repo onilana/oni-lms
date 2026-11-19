@@ -6,6 +6,7 @@ use App\Http\Requests\Lesson\LessonRequest;
 use App\Http\Resources\Lesson\LessonResource;
 use App\Models\CourseSection;
 use App\Models\Lesson;
+use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -55,8 +56,17 @@ class LessonController
         ]);
     }
 
-    public function destroy(Lesson $lesson): JsonResponse
+    public function destroy(Request $request, Lesson $lesson): JsonResponse
     {
+        $user = $request->user();
+        if (
+            ! $lesson->course->isTaughtBy($user)
+            && ! $user->isSuperAdmin()
+            && ! ($user->hasPermission('lessons.manage') && ! $user->hasRole(Role::TEACHER))
+        ) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
         $lesson->delete();
 
         return response()->json([

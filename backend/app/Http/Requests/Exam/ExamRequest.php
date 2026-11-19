@@ -14,7 +14,11 @@ class ExamRequest extends FormRequest
         }
 
         $course = $this->route('course') ?? $this->route('exam')?->course;
-        if ($course && ($course->isTaughtBy($user) || $user->hasPermission('exams.manage') || $user->isSuperAdmin())) {
+        if ($course && (
+            $course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('exams.manage') && ! $user->hasRole('teacher'))
+        )) {
             return true;
         }
 

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Assignment;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class AssignmentRequest extends FormRequest
 {
@@ -14,7 +15,11 @@ class AssignmentRequest extends FormRequest
         }
 
         $course = $this->route('course') ?? $this->route('assignment')?->course;
-        if ($course && ($course->isTaughtBy($user) || $user->hasPermission('assignments.manage') || $user->isSuperAdmin())) {
+        if ($course && (
+            $course->isTaughtBy($user)
+            || $user->isSuperAdmin()
+            || ($user->hasPermission('assignments.manage') && ! $user->hasRole('teacher'))
+        )) {
             return true;
         }
 
@@ -23,9 +28,15 @@ class AssignmentRequest extends FormRequest
 
     public function rules(): array
     {
+        $course = $this->route('course') ?? $this->route('assignment')?->course;
+        $sectionExists = Rule::exists('course_sections', 'id');
+        if ($course) {
+            $sectionExists->where('course_id', $course->id);
+        }
+
         return [
             'title' => ['required', 'string', 'max:255'],
-            'section_id' => ['nullable', 'uuid', 'exists:course_sections,id'],
+            'section_id' => ['nullable', 'uuid', $sectionExists],
             'description' => ['nullable', 'string'],
             'instructions' => ['nullable', 'string'],
             'due_date' => ['required', 'date'],

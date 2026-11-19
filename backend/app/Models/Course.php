@@ -113,6 +113,7 @@ class Course extends Model
         $completedLessons = LessonProgress::where('course_id', $this->id)
             ->where('user_id', $user->id)
             ->where('is_completed', true)
+            ->whereHas('lesson', fn ($query) => $query->where('status', 'published'))
             ->count();
 
         $percentage = (int) round(($completedLessons / $totalLessons) * 100);

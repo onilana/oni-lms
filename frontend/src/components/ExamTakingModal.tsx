@@ -18,14 +18,30 @@ interface ExamTakingModalProps {
   exam: Exam;
   initialAttempt: ExamAttempt;
   initialQuestions: Question[];
+  initialResponseTiming?: { requestedAt: number; receivedAt: number };
   onClose: () => void;
   onFinished: () => void;
 }
+
+const getAttemptClockOffset = (
+  attempt: ExamAttempt,
+  now = Date.now(),
+  responseTiming?: { requestedAt: number; receivedAt: number }
+) => {
+  const expiresAt = Date.parse(attempt.expires_at);
+  if (!Number.isFinite(expiresAt) || !Number.isFinite(attempt.time_remaining_seconds)) return 0;
+  const serverNow = expiresAt - attempt.time_remaining_seconds * 1000;
+  const clientReference = responseTiming
+    ? responseTiming.requestedAt + (responseTiming.receivedAt - responseTiming.requestedAt) / 2
+    : now;
+  return serverNow - clientReference;
+};
 
 export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   exam,
   initialAttempt,
   initialQuestions,
+  initialResponseTiming,
   onClose,
   onFinished,
 }) => {
@@ -37,9 +53,26 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const [answers, setAnswers] = useState<Record<string, any>>(
     initialAttempt.answers_snapshot || {}
   );
+  const answersRef = useRef<Record<string, any>>(initialAttempt.answers_snapshot || {});
+  const resultRef = useRef<ExamAttempt | null>(
+    initialAttempt.status === 'evaluated' ? initialAttempt : null
+  );
+  const submittingRef = useRef(false);
+  const mountedRef = useRef(true);
+  const clockOffsetRef = useRef(getAttemptClockOffset(initialAttempt, Date.now(), initialResponseTiming));
 
   const [timeRemaining, setTimeRemaining] = useState<number>(
-    initialAttempt.time_remaining_seconds || exam.duration_minutes * 60
+    Number.isFinite(Date.parse(initialAttempt.expires_at))
+      ? Math.max(
+          0,
+          Math.ceil(
+            (Date.parse(initialAttempt.expires_at) -
+              (Date.now() + getAttemptClockOffset(initialAttempt, Date.now(), initialResponseTiming))) / 1000
+          )
+        )
+      : Number.isFinite(initialAttempt.time_remaining_seconds)
+      ? initialAttempt.time_remaining_seconds
+      : exam.duration_minutes * 60
   );
 
   const [saving, setSaving] = useState(false);
@@ -50,105 +83,134 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   );
   const [confirmSubmitOpen, setConfirmSubmitOpen] = useState(false);
 
-  // Countdown timer
-  useEffect(() => {
-    if (result) return;
-
-    const timer = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleAutoSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [result]);
-
   // Autosave function
-  const autosave = useCallback(async (currentAnswers: Record<string, any>) => {
-    if (attempt.status !== 'in_progress') return;
+  const autosave = useCallback(async () => {
+    if (attempt.status !== 'in_progress' || submittingRef.current || resultRef.current) return;
+    const requestStartedAt = Date.now();
     try {
       setSaving(true);
-      const res = await apiRequest<{ message: string; time_remaining_seconds: number }>(
+      const res = await apiRequest<{
+        message: string;
+        time_remaining_seconds: number;
+        expires_at?: string;
+      }>(
         `/attempts/${attempt.id}/save`,
         {
           method: 'POST',
-          body: JSON.stringify({ answers: currentAnswers }),
+          body: JSON.stringify({ answers: answersRef.current }),
         }
       );
+      if (!mountedRef.current || resultRef.current) return;
       setLastSavedTime(new Date());
       if (res.time_remaining_seconds !== undefined) {
+        const receivedAt = Date.now();
+        const expiresAt = Date.parse(res.expires_at ?? attempt.expires_at);
+        if (Number.isFinite(expiresAt)) {
+          const serverNow = expiresAt - res.time_remaining_seconds * 1000;
+          const midpoint = requestStartedAt + (receivedAt - requestStartedAt) / 2;
+          clockOffsetRef.current = serverNow - midpoint;
+        }
         setTimeRemaining(res.time_remaining_seconds);
       }
     } catch (err) {
-      console.error('Autosave error', err);
+      if (mountedRef.current) console.error('Autosave error', err);
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
-  }, [attempt.id, attempt.status]);
+  }, [attempt.expires_at, attempt.id, attempt.status]);
 
-  // Periodic autosave every 25 seconds
+  // Keep the cadence stable while reading the latest answer snapshot from a ref.
   useEffect(() => {
-    if (result) return;
+    if (result || submitting) return;
     const interval = setInterval(() => {
-      autosave(answers);
+      autosave();
     }, 25000);
     return () => clearInterval(interval);
-  }, [answers, autosave, result]);
+  }, [autosave, result, submitting]);
 
   const handleSelectOption = (questionId: string, optionId: string, isMultiple: boolean) => {
-    setAnswers((prev) => {
-      const updated = { ...prev };
-      if (isMultiple) {
-        const currentArr = Array.isArray(updated[questionId]) ? [...updated[questionId]] : [];
-        if (currentArr.includes(optionId)) {
-          updated[questionId] = currentArr.filter((id) => id !== optionId);
-        } else {
-          updated[questionId] = [...currentArr, optionId];
-        }
+    const updated = { ...answersRef.current };
+    if (isMultiple) {
+      const currentArr = Array.isArray(updated[questionId]) ? [...updated[questionId]] : [];
+      if (currentArr.includes(optionId)) {
+        updated[questionId] = currentArr.filter((id) => id !== optionId);
       } else {
-        updated[questionId] = optionId;
+        updated[questionId] = [...currentArr, optionId];
       }
-      return updated;
-    });
+    } else {
+      updated[questionId] = optionId;
+    }
+    answersRef.current = updated;
+    setAnswers(updated);
   };
 
   const handleShortAnswerChange = (questionId: string, text: string) => {
-    setAnswers((prev) => ({
-      ...prev,
+    const updated = {
+      ...answersRef.current,
       [questionId]: text,
-    }));
-  };
-
-  const handleAutoSubmit = async () => {
-    if (submitting || result) return;
-    await submitExam();
+    };
+    answersRef.current = updated;
+    setAnswers(updated);
   };
 
   const submitExam = async () => {
+    if (submittingRef.current || resultRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
     try {
-      setSubmitting(true);
       const res = await apiRequest<{ message: string; data: ExamAttempt }>(
         `/attempts/${attempt.id}/submit`,
         {
           method: 'POST',
-          body: JSON.stringify({ answers }),
+          body: JSON.stringify({ answers: answersRef.current }),
         }
       );
-      setResult(res.data);
-      setAttempt(res.data);
-      setConfirmSubmitOpen(false);
+      resultRef.current = res.data;
+      if (mountedRef.current) {
+        setResult(res.data);
+        setAttempt(res.data);
+        setConfirmSubmitOpen(false);
+      }
       onFinished();
     } catch (err: any) {
-      alert(err.message || 'Submission failed');
+      submittingRef.current = false;
+      if (mountedRef.current) alert(err.message || 'Submission failed');
     } finally {
-      setSubmitting(false);
+      if (mountedRef.current) setSubmitting(false);
     }
   };
+
+  const handleAutoSubmit = () => {
+    if (submittingRef.current || resultRef.current) return;
+    void submitExam();
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (result) return;
+
+    const updateCountdown = () => {
+      const expiresAt = Date.parse(attempt.expires_at);
+      const remaining = Number.isFinite(expiresAt)
+        ? Math.max(0, Math.ceil((expiresAt - (Date.now() + clockOffsetRef.current)) / 1000))
+        : Math.max(0, timeRemaining - 1);
+      setTimeRemaining(remaining);
+      if (remaining === 0) {
+        clearInterval(timer);
+        handleAutoSubmit();
+      }
+    };
+
+    const timer = setInterval(updateCountdown, 1000);
+    updateCountdown();
+    return () => clearInterval(timer);
+  }, [attempt.expires_at, result]);
 
   const currentQ = questions[currentIndex];
   const answeredCount = Object.keys(answers).filter(
@@ -256,13 +318,12 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                             <label
                               key={opt.id}
                               className={`option-item ${isSelected ? 'selected' : ''}`}
-                              onClick={() => handleSelectOption(currentQ.id, opt.id, false)}
                             >
                               <input
                                 type="radio"
                                 name={`q_${currentQ.id}`}
                                 checked={isSelected}
-                                onChange={() => {}}
+                                onChange={() => handleSelectOption(currentQ.id, opt.id, false)}
                               />
                               <span className="option-label">{opt.text}</span>
                             </label>
@@ -282,12 +343,11 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
                             <label
                               key={opt.id}
                               className={`option-item ${isChecked ? 'selected' : ''}`}
-                              onClick={() => handleSelectOption(currentQ.id, opt.id, true)}
                             >
                               <input
                                 type="checkbox"
                                 checked={isChecked}
-                                onChange={() => {}}
+                                onChange={() => handleSelectOption(currentQ.id, opt.id, true)}
                               />
                               <span className="option-label">{opt.text}</span>
                             </label>

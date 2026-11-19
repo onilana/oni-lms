@@ -42,7 +42,7 @@ class LessonResource extends JsonResource
             // Only expose content and stream URLs if user has access!
             'content' => $isAccessible ? $this->content : null,
             'video_url' => $isAccessible ? $this->video_url : null,
-            'attachment_name' => $this->attachment_name,
+            'attachment_name' => $isAccessible ? $this->attachment_name : null,
             'attachment_path' => $isAccessible ? $this->attachment_path : null,
             'status' => $this->status,
             'progress' => $progress,

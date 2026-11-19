@@ -2,6 +2,8 @@
 
 namespace App\Http\Resources\Exam;
 
+use App\Models\Course;
+use App\Models\Exam;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -10,10 +12,18 @@ class QuestionResource extends JsonResource
     public function toArray(Request $request): array
     {
         $user = $request->user();
-        $isTeacherOrAdmin = $user && ($user->hasRole('teacher') || $user->hasRole('super_admin') || $user->hasPermission('exams.manage'));
+        $includeSolutions = false;
+        if ($user) {
+            $includeSolutions = $user->isSuperAdmin() || $user->hasPermission('question_banks.manage');
 
-        // Check if student has finished and evaluated their attempt
-        $includeSolutions = $isTeacherOrAdmin;
+            if (! $includeSolutions) {
+                $courseId = $this->pivot?->exam_id
+                    ? Exam::query()->whereKey($this->pivot->exam_id)->value('course_id')
+                    : $this->course_id;
+                $course = $courseId ? Course::find($courseId) : null;
+                $includeSolutions = $course?->isTaughtBy($user) ?? false;
+            }
+        }
 
         return [
             'id' => $this->id,

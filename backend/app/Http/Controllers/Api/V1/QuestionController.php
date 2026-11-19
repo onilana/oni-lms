@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Requests\Exam\QuestionRequest;
 use App\Http\Resources\Exam\QuestionResource;
 use App\Models\Question;
+use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -59,8 +60,12 @@ class QuestionController
     public function destroy(Request $request, Question $question): JsonResponse
     {
         $user = $request->user();
-        if (!$user->hasPermission('exams.manage') && !$user->hasRole('teacher') && !$user->isSuperAdmin()) {
+        if (! $this->canManageQuestion($question, $user)) {
             return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if ($question->exams()->whereHas('attempts')->exists()) {
+            return response()->json(['message' => 'Questions used by exam attempts cannot be deleted.'], 409);
         }
 
         $question->delete();
@@ -68,5 +73,14 @@ class QuestionController
         return response()->json([
             'message' => 'Question deleted successfully',
         ]);
+    }
+
+    private function canManageQuestion(Question $question, User $user): bool
+    {
+        if ($user->isSuperAdmin() || $user->hasPermission('question_banks.manage')) {
+            return true;
+        }
+
+        return $question->course !== null && $question->course->isTaughtBy($user);
     }
 }

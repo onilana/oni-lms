@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   CheckCircle2,
@@ -45,26 +45,42 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
   const [newLessonType, setNewLessonType] = useState<'text' | 'video' | 'pdf'>('text');
   const [newLessonContent, setNewLessonContent] = useState('');
   const [newLessonVideo, setNewLessonVideo] = useState('');
+  const [newLessonAttachmentPath, setNewLessonAttachmentPath] = useState('');
+  const [newLessonAttachmentName, setNewLessonAttachmentName] = useState('');
   const [newLessonPreview, setNewLessonPreview] = useState(false);
+  const courseIdRef = useRef(courseId);
+  courseIdRef.current = courseId;
+  const courseLoadIdRef = useRef(0);
+  const lessonSelectionIdRef = useRef(0);
+  const progressQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const desiredProgressRef = useRef<Record<string, boolean>>({});
+  const confirmedProgressRef = useRef<Record<string, boolean>>({});
+  const progressIntentRevisionRef = useRef<Record<string, number>>({});
 
-  const fetchCourseData = async () => {
+  const fetchCourseData = async (requestedCourseId = courseId) => {
+    const requestId = ++courseLoadIdRef.current;
+    const isCurrentRequest = () =>
+      requestId === courseLoadIdRef.current && requestedCourseId === courseIdRef.current;
     setLoading(true);
     setError(null);
     try {
       const [courseRes, sectionsRes, progressRes] = await Promise.all([
-        apiRequest<{ course: Course }>(`/courses/${courseId}`),
-        apiRequest<{ sections: CourseSection[] }>(`/courses/${courseId}/sections`),
-        apiRequest<{ progress: CourseProgress }>(`/courses/${courseId}/progress`).catch(() => ({
-          progress: { course_id: courseId, total_lessons: 0, completed_lessons: 0, percentage: 0 },
+        apiRequest<{ course: Course }>(`/courses/${requestedCourseId}`),
+        apiRequest<{ sections: CourseSection[] }>(`/courses/${requestedCourseId}/sections`),
+        apiRequest<{ progress: CourseProgress }>(`/courses/${requestedCourseId}/progress`).catch(() => ({
+          progress: { course_id: requestedCourseId, total_lessons: 0, completed_lessons: 0, percentage: 0 },
         })),
       ]);
 
+      if (!isCurrentRequest()) return;
       setCourse(courseRes.course);
       setSections(sectionsRes.sections);
       setProgress(progressRes.progress);
 
-      // Select first lesson by default if none active
-      if (!activeLesson && sectionsRes.sections.length > 0) {
+      const activeLessonExists = sectionsRes.sections.some((section) =>
+        section.lessons.some((lesson) => lesson.id === activeLesson?.id)
+      );
+      if ((!activeLesson || activeLesson.course_id !== requestedCourseId || !activeLessonExists) && sectionsRes.sections.length > 0) {
         for (const sec of sectionsRes.sections) {
           if (sec.lessons && sec.lessons.length > 0) {
             setActiveLesson(sec.lessons[0]);
@@ -73,41 +89,80 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
         }
       }
 
-      if (sectionsRes.sections.length > 0 && !targetSectionId) {
+      if (sectionsRes.sections.length > 0 && (!targetSectionId || !sectionsRes.sections.some((section) => section.id === targetSectionId))) {
         setTargetSectionId(sectionsRes.sections[0].id);
       }
     } catch (err) {
+      if (!isCurrentRequest()) return;
       if (err instanceof ApiError) {
         setError(err.message);
       } else {
         setError('Failed to load course lessons.');
       }
     } finally {
-      setLoading(false);
+      if (isCurrentRequest()) setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchCourseData();
+    courseLoadIdRef.current += 1;
+    lessonSelectionIdRef.current += 1;
+    setCourse(null);
+    setSections([]);
+    setActiveLesson(null);
+    setProgress(null);
+    setTargetSectionId('');
+    desiredProgressRef.current = {};
+    confirmedProgressRef.current = {};
+    progressIntentRevisionRef.current = {};
+    fetchCourseData(courseId);
   }, [courseId]);
 
   const handleSelectLesson = async (lesson: Lesson) => {
+    const selectionId = ++lessonSelectionIdRef.current;
     setActiveLesson(lesson);
 
     // Fetch full lesson details with access check
     try {
       const res = await apiRequest<{ lesson: Lesson }>(`/lessons/${lesson.id}`);
-      setActiveLesson(res.lesson);
+      if (
+        selectionId === lessonSelectionIdRef.current &&
+        res.lesson.id === lesson.id &&
+        res.lesson.course_id === courseIdRef.current
+      ) {
+        setActiveLesson(res.lesson);
+      }
     } catch (err) {
-      console.warn('Error refreshing lesson details', err);
+      if (selectionId === lessonSelectionIdRef.current) {
+        console.warn('Error refreshing lesson details', err);
+      }
     }
   };
 
   const handleToggleComplete = async (lesson: Lesson) => {
-    const isCurrentlyCompleted = lesson.progress?.is_completed ?? false;
+    const isCurrentlyCompleted = desiredProgressRef.current[lesson.id] ?? lesson.progress?.is_completed ?? false;
     const newStatus = !isCurrentlyCompleted;
+    const intentRevision = (progressIntentRevisionRef.current[lesson.id] ?? 0) + 1;
+    progressIntentRevisionRef.current[lesson.id] = intentRevision;
+    desiredProgressRef.current[lesson.id] = newStatus;
 
-    try {
+    const setLessonCompletion = (lessonId: string, isCompleted: boolean) => {
+      setActiveLesson((prev) => (prev && prev.id === lessonId
+        ? { ...prev, progress: { ...(prev.progress ?? { last_position_seconds: 0 }), is_completed: isCompleted } }
+        : prev));
+      setSections((prevSecs) =>
+        prevSecs.map((sec) => ({
+          ...sec,
+          lessons: sec.lessons.map((item) => (item.id === lessonId
+            ? { ...item, progress: { ...(item.progress ?? { last_position_seconds: 0 }), is_completed: isCompleted } }
+            : item)),
+        }))
+      );
+    };
+
+    setLessonCompletion(lesson.id, newStatus);
+
+    const mutation = progressQueueRef.current.then(async () => {
       const res = await apiRequest<{
         message: string;
         progress: { is_completed: boolean; completed_at?: string; last_position_seconds: number };
@@ -117,18 +172,33 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
         body: JSON.stringify({ is_completed: newStatus }),
       });
 
-      // Update local state
-      setActiveLesson((prev) => (prev && prev.id === lesson.id ? { ...prev, progress: res.progress } : prev));
+      if (courseIdRef.current !== lesson.course_id) return;
+      confirmedProgressRef.current[lesson.id] = res.progress.is_completed;
       setProgress(res.course_progress);
+      if (progressIntentRevisionRef.current[lesson.id] === intentRevision) {
+        desiredProgressRef.current[lesson.id] = res.progress.is_completed;
+        setActiveLesson((prev) => (prev && prev.id === lesson.id ? { ...prev, progress: res.progress } : prev));
+        setSections((prevSecs) =>
+          prevSecs.map((sec) => ({
+            ...sec,
+            lessons: sec.lessons.map((item) => (item.id === lesson.id ? { ...item, progress: res.progress } : item)),
+          }))
+        );
+      }
+    });
+    progressQueueRef.current = mutation.then(() => undefined, () => undefined);
 
-      // Update sections tree
-      setSections((prevSecs) =>
-        prevSecs.map((sec) => ({
-          ...sec,
-          lessons: sec.lessons.map((l) => (l.id === lesson.id ? { ...l, progress: res.progress } : l)),
-        }))
-      );
+    try {
+      await mutation;
     } catch (err) {
+      if (
+        courseIdRef.current === lesson.course_id &&
+        progressIntentRevisionRef.current[lesson.id] === intentRevision
+      ) {
+        const rollbackStatus = confirmedProgressRef.current[lesson.id] ?? !newStatus;
+        desiredProgressRef.current[lesson.id] = rollbackStatus;
+        setLessonCompletion(lesson.id, rollbackStatus);
+      }
       alert(err instanceof Error ? err.message : 'Error updating lesson progress');
     }
   };
@@ -164,6 +234,8 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
           type: newLessonType,
           content: newLessonContent,
           video_url: newLessonVideo || undefined,
+          attachment_path: newLessonType === 'pdf' ? newLessonAttachmentPath.trim() || undefined : undefined,
+          attachment_name: newLessonType === 'pdf' ? newLessonAttachmentName.trim() || undefined : undefined,
           is_free_preview: newLessonPreview,
           status: 'published',
         }),
@@ -173,6 +245,8 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
       setNewLessonTitle('');
       setNewLessonContent('');
       setNewLessonVideo('');
+      setNewLessonAttachmentPath('');
+      setNewLessonAttachmentName('');
       await fetchCourseData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating lesson');
@@ -239,33 +313,34 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                     const isCompleted = lesson.progress?.is_completed ?? false;
 
                     return (
-                      <div
-                        key={lesson.id}
-                        className={`lesson-item ${isSelected ? 'active' : ''}`}
+                    <div key={lesson.id} className={`lesson-item ${isSelected ? 'active' : ''}`}>
+                      <button
+                        type="button"
+                        className="lesson-select"
+                        aria-current={isSelected ? 'true' : undefined}
                         onClick={() => handleSelectLesson(lesson)}
                       >
-                        <button
-                          className="btn-check"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleComplete(lesson);
-                          }}
-                          title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
-                        >
-                          {isCompleted ? (
-                            <CheckCircle2 size={16} className="icon-completed" />
-                          ) : (
-                            <Circle size={16} className="icon-pending" />
-                          )}
-                        </button>
-
-                        <div className="lesson-type-icon">
+                        <span className="lesson-type-icon">
                           {lesson.type === 'video' && <Video size={14} />}
                           {lesson.type === 'pdf' && <FileText size={14} />}
                           {lesson.type === 'text' && <FileText size={14} />}
-                        </div>
-
+                        </span>
                         <span className="lesson-item-title">{lesson.title}</span>
+                      </button>
+                        {lesson.is_accessible && (
+                          <button
+                            type="button"
+                            className="btn-check"
+                            onClick={() => handleToggleComplete(lesson)}
+                            title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
+                          >
+                            {isCompleted ? (
+                              <CheckCircle2 size={16} className="icon-completed" />
+                            ) : (
+                              <Circle size={16} className="icon-pending" />
+                            )}
+                          </button>
+                        )}
 
                         {!lesson.is_accessible && (
                           <span title="Enroll to access" style={{ marginLeft: 'auto', display: 'grid' }}>
@@ -301,15 +376,17 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                   <h2>{activeLesson.title}</h2>
                 </div>
 
-                <button
-                  className={`btn ${activeLesson.progress?.is_completed ? 'btn-secondary' : 'btn-primary'}`}
-                  onClick={() => handleToggleComplete(activeLesson)}
-                >
-                  <CheckCircle2 size={16} />
-                  <span>
-                    {activeLesson.progress?.is_completed ? 'Completed ✓' : 'Mark as Completed'}
-                  </span>
-                </button>
+                {activeLesson.is_accessible && (
+                  <button
+                    className={`btn ${activeLesson.progress?.is_completed ? 'btn-secondary' : 'btn-primary'}`}
+                    onClick={() => handleToggleComplete(activeLesson)}
+                  >
+                    <CheckCircle2 size={16} />
+                    <span>
+                      {activeLesson.progress?.is_completed ? 'Completed ✓' : 'Mark as Completed'}
+                    </span>
+                  </button>
+                )}
               </div>
 
               {!activeLesson.is_accessible ? (
@@ -349,14 +426,20 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                         <strong>{activeLesson.attachment_name ?? 'Lecture Slides & Notes.pdf'}</strong>
                         <p>Official course slide deck and reading materials.</p>
                       </div>
-                      <a
-                        href={activeLesson.attachment_path ?? '#'}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="btn btn-primary btn-sm"
-                      >
-                        <Download size={14} /> Download PDF
-                      </a>
+                      {activeLesson.attachment_path ? (
+                        <a
+                          href={activeLesson.attachment_path}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn btn-primary btn-sm"
+                        >
+                          <Download size={14} /> Download PDF
+                        </a>
+                      ) : (
+                        <button className="btn btn-primary btn-sm" disabled>
+                          <Download size={14} /> PDF unavailable
+                        </button>
+                      )}
                     </div>
                   )}
 
@@ -471,6 +554,29 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                     onChange={(e) => setNewLessonVideo(e.target.value)}
                   />
                 </div>
+              )}
+
+              {newLessonType === 'pdf' && (
+                <>
+                  <div className="form-group">
+                    <label>PDF Source Path or URL</label>
+                    <input
+                      type="text"
+                      placeholder="https://... or authorized storage path"
+                      value={newLessonAttachmentPath}
+                      onChange={(e) => setNewLessonAttachmentPath(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>PDF File Name (Optional)</label>
+                    <input
+                      placeholder="e.g. Lecture 2 Notes.pdf"
+                      value={newLessonAttachmentName}
+                      onChange={(e) => setNewLessonAttachmentName(e.target.value)}
+                    />
+                  </div>
+                </>
               )}
 
               <div className="form-group">

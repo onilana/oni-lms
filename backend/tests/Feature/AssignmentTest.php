@@ -8,6 +8,7 @@ use App\Models\AssignmentSubmission;
 use App\Models\Course;
 use App\Models\CourseEnrolment;
 use App\Models\CourseInstructor;
+use App\Models\CourseSection;
 use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\AcademicSeeder;
@@ -115,6 +116,128 @@ class AssignmentTest extends TestCase
         $this->assertCount(2, $response->json('assignments'));
     }
 
+    public function test_students_cannot_view_or_delete_draft_assignments(): void
+    {
+        $draft = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'Draft assignment',
+            'due_date' => now()->addDay(),
+            'status' => 'draft',
+        ]);
+
+        $this->actingAs($this->enrolledStudent)
+            ->getJson('/api/v1/assignments/'.$draft->id)
+            ->assertNotFound();
+
+        $this->actingAs($this->enrolledStudent)
+            ->deleteJson('/api/v1/assignments/'.$draft->id)
+            ->assertForbidden();
+
+        $this->assertDatabaseHas('assignments', ['id' => $draft->id]);
+    }
+
+    public function test_assignment_deletion_is_course_scoped_unless_global_delete_permission(): void
+    {
+        $otherCourse = Course::where('id', '!=', $this->course->id)->firstOrFail();
+        $assignment = Assignment::create([
+            'course_id' => $otherCourse->id,
+            'title' => 'Other course assignment',
+            'due_date' => now()->addDay(),
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($this->teacher)
+            ->deleteJson('/api/v1/assignments/'.$assignment->id)
+            ->assertForbidden();
+
+        $globalManager = User::factory()->create();
+        $globalManager->roles()->attach(Role::where('name', Role::COLLEGE_ADMIN)->value('id'));
+
+        $this->actingAs($globalManager)
+            ->deleteJson('/api/v1/assignments/'.$assignment->id)
+            ->assertOk();
+    }
+
+    public function test_assignment_section_must_belong_to_the_assignment_course(): void
+    {
+        $otherCourse = Course::where('id', '!=', $this->course->id)->firstOrFail();
+        $foreignSection = CourseSection::create([
+            'course_id' => $otherCourse->id,
+            'title' => 'Foreign section',
+        ]);
+
+        $this->actingAs($this->teacher)
+            ->postJson('/api/v1/courses/'.$this->course->id.'/assignments', [
+                'title' => 'Misplaced assignment',
+                'section_id' => $foreignSection->id,
+                'due_date' => now()->addDay()->toIso8601String(),
+                'max_score' => 100,
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['section_id']);
+    }
+
+    public function test_assignment_submission_requires_valid_content_and_published_status(): void
+    {
+        $both = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'Text or file submission',
+            'due_date' => now()->addDay(),
+            'submission_type' => 'both',
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$both->id.'/submit', [])
+            ->assertUnprocessable();
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$both->id.'/submit', [
+                'submission_text' => 'Text is enough for the both contract.',
+            ])
+            ->assertCreated();
+
+        $assignment = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'Text submission only',
+            'due_date' => now()->addDay(),
+            'submission_type' => 'text',
+            'status' => 'published',
+        ]);
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['submission_text']);
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
+                'submission_text' => 'Text answer',
+                'attachment_path' => 'submissions/file.pdf',
+            ])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['attachment_path']);
+
+        $assignment->update(['status' => 'draft']);
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
+                'submission_text' => 'Text answer',
+            ])
+            ->assertForbidden();
+
+        $assignment->update(['status' => 'closed']);
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
+                'submission_text' => 'Text answer',
+            ])
+            ->assertForbidden();
+
+        $this->assertDatabaseMissing('assignment_submissions', [
+            'assignment_id' => $assignment->id,
+            'user_id' => $this->enrolledStudent->id,
+        ]);
+    }
+
     public function test_instructor_can_create_assignment(): void
     {
         $response = $this->withHeader('Authorization', 'Bearer '.$this->teacherToken)
@@ -150,6 +273,38 @@ class AssignmentTest extends TestCase
         $this->assertDatabaseHas('assignment_submissions', [
             'assignment_id' => $assignment->id,
             'user_id' => $this->enrolledStudent->id,
+        ]);
+    }
+
+    public function test_resubmitting_clears_previous_grade(): void
+    {
+        $assignment = Assignment::where('course_id', $this->course->id)->firstOrFail();
+        $submission = AssignmentSubmission::create([
+            'assignment_id' => $assignment->id,
+            'user_id' => $this->enrolledStudent->id,
+            'submission_text' => 'Old answer',
+            'status' => 'graded',
+            'score' => 80,
+            'feedback' => 'Old feedback',
+            'graded_by_id' => $this->teacher->id,
+            'graded_at' => now(),
+        ]);
+
+        $this->actingAs($this->enrolledStudent)
+            ->postJson('/api/v1/assignments/'.$assignment->id.'/submit', [
+                'submission_text' => 'Replacement answer',
+            ])
+            ->assertCreated()
+            ->assertJsonPath('submission.score', null)
+            ->assertJsonPath('submission.feedback', null)
+            ->assertJsonPath('submission.grader', null);
+
+        $this->assertDatabaseHas('assignment_submissions', [
+            'id' => $submission->id,
+            'score' => null,
+            'feedback' => null,
+            'graded_by_id' => null,
+            'graded_at' => null,
         ]);
     }
 

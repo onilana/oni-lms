@@ -73,6 +73,7 @@ class RoleAndPermissionSeeder extends Seeder
             // Assignments
             ['name' => 'assignments.view', 'label' => 'View Assignments', 'group' => 'assignments'],
             ['name' => 'assignments.manage', 'label' => 'Create and Edit Assignments', 'group' => 'assignments'],
+            ['name' => 'assignments.delete', 'label' => 'Delete Assignments Across Courses', 'group' => 'assignments'],
             ['name' => 'assignments.submit', 'label' => 'Submit Assignment Responses', 'group' => 'assignments'],
             ['name' => 'assignments.grade', 'label' => 'Grade Assignment Submissions', 'group' => 'assignments'],
 
@@ -81,6 +82,7 @@ class RoleAndPermissionSeeder extends Seeder
             ['name' => 'exams.manage', 'label' => 'Create and Manage Exams', 'group' => 'exams'],
             ['name' => 'exams.attempt', 'label' => 'Take Exam Attempts', 'group' => 'exams'],
             ['name' => 'exams.grade', 'label' => 'Evaluate and Grade Exams', 'group' => 'exams'],
+            ['name' => 'question_banks.manage', 'label' => 'Manage Shared Question Banks', 'group' => 'exams'],
 
             // Attendance
             ['name' => 'attendance.view', 'label' => 'View Attendance', 'group' => 'attendance'],

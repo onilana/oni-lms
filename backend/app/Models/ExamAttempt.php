@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Facades\DB;
 
 class ExamAttempt extends Model
 {
@@ -24,6 +25,7 @@ class ExamAttempt extends Model
         'percentage',
         'is_passed',
         'answers_snapshot',
+        'grading_snapshot',
     ];
 
     protected function casts(): array
@@ -37,6 +39,7 @@ class ExamAttempt extends Model
             'percentage' => 'decimal:2',
             'is_passed' => 'boolean',
             'answers_snapshot' => 'array',
+            'grading_snapshot' => 'array',
         ];
     }
 
@@ -75,54 +78,84 @@ class ExamAttempt extends Model
      */
     public function evaluateAndFinalize(?array $submittedAnswers = null): void
     {
-        if ($this->status === 'evaluated' || $this->status === 'submitted') {
-            return;
-        }
+        DB::transaction(function () use ($submittedAnswers): void {
+            $attempt = static::query()->whereKey($this->getKey())->lockForUpdate()->first();
+            if (! $attempt || $attempt->status === 'evaluated') {
+                return;
+            }
 
-        $exam = $this->exam()->with('questions')->first();
-        if (!$exam) {
-            return;
-        }
+            if (! in_array($attempt->status, ['in_progress', 'submitted', 'timed_out'], true)) {
+                return;
+            }
 
-        // Merge submitted answers snapshot if provided
-        $responses = $submittedAnswers ?? ($this->answers_snapshot ?? []);
+            $responses = $attempt->answers_snapshot ?? [];
+            if (! $attempt->isExpired() && $submittedAnswers !== null) {
+                $responses = array_merge($responses, $submittedAnswers);
+            }
+            $gradingSnapshot = $attempt->grading_snapshot;
+            $questions = $gradingSnapshot['questions'] ?? null;
 
-        $totalScore = 0.0;
-        $maxPossibleMarks = 0.0;
+            if (! is_array($questions)) {
+                $exam = $attempt->exam()->with('questions')->first();
+                if (! $exam) {
+                    return;
+                }
 
-        foreach ($exam->questions as $question) {
-            $questionPoints = (float)($question->pivot->points ?? $question->points ?? 1.0);
-            $maxPossibleMarks += $questionPoints;
+                $questions = $exam->questions->mapWithKeys(
+                    fn (Question $question): array => [
+                        $question->id => [
+                            'question_type' => $question->question_type,
+                            'correct_answers' => $question->correct_answers,
+                            'points' => (float) ($question->pivot->points ?? $question->points ?? 1),
+                        ],
+                    ]
+                )->all();
+                $passingPercentage = (float) $exam->passing_percentage;
+            } else {
+                $passingPercentage = (float) ($gradingSnapshot['passing_percentage'] ?? $attempt->exam->passing_percentage);
+            }
 
-            $studentResponse = $responses[$question->id] ?? null;
-            $isCorrect = $question->evaluateResponse($studentResponse);
-            $awarded = $isCorrect ? $questionPoints : 0.0;
-            $totalScore += $awarded;
+            $totalScore = 0.0;
+            $maxPossibleMarks = 0.0;
 
-            ExamAttemptAnswer::updateOrCreate(
-                [
-                    'exam_attempt_id' => $this->id,
-                    'question_id' => $question->id,
-                ],
-                [
-                    'student_response' => $studentResponse,
-                    'is_correct' => $isCorrect,
-                    'score_awarded' => $awarded,
-                    'graded_at' => now(),
-                ]
-            );
-        }
+            foreach ($questions as $questionId => $questionData) {
+                $questionPoints = (float) ($questionData['points'] ?? 1.0);
+                $maxPossibleMarks += $questionPoints;
+                $studentResponse = $responses[$questionId] ?? null;
+                $question = new Question;
+                $question->forceFill([
+                    'question_type' => $questionData['question_type'],
+                    'correct_answers' => $questionData['correct_answers'],
+                ]);
+                $isCorrect = $question->evaluateResponse($studentResponse);
+                $awarded = $isCorrect ? $questionPoints : 0.0;
+                $totalScore += $awarded;
 
-        $percentage = $maxPossibleMarks > 0 ? ($totalScore / $maxPossibleMarks) * 100 : 0.0;
-        $isPassed = $percentage >= (float)$exam->passing_percentage;
+                ExamAttemptAnswer::updateOrCreate(
+                    [
+                        'exam_attempt_id' => $attempt->id,
+                        'question_id' => $questionId,
+                    ],
+                    [
+                        'student_response' => $studentResponse,
+                        'is_correct' => $isCorrect,
+                        'score_awarded' => $awarded,
+                        'graded_at' => now(),
+                    ]
+                );
+            }
 
-        $this->update([
-            'status' => 'evaluated',
-            'submitted_at' => now(),
-            'score' => round($totalScore, 2),
-            'percentage' => round($percentage, 2),
-            'is_passed' => $isPassed,
-            'answers_snapshot' => $responses,
-        ]);
+            $percentage = $maxPossibleMarks > 0 ? ($totalScore / $maxPossibleMarks) * 100 : 0.0;
+            $attempt->update([
+                'status' => 'evaluated',
+                'submitted_at' => $attempt->submitted_at ?? now(),
+                'score' => round($totalScore, 2),
+                'percentage' => round($percentage, 2),
+                'is_passed' => $percentage >= $passingPercentage,
+                'answers_snapshot' => $responses,
+            ]);
+        });
+
+        $this->refresh();
     }
 }
