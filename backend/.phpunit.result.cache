@@ -1,0 +1,1 @@
+{"version":2,"defects":[],"times":{"Tests\\Unit\\ExampleTest::test_that_true_is_true":0.641,"Tests\\Feature\\HealthTest::test_health_endpoint_returns_json_structure":19.04}}
