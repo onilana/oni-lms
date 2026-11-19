@@ -23,11 +23,15 @@ class HealthController
             $checks['database'] = 'unavailable';
         }
 
-        try {
-            Redis::connection()->ping();
+        if (config('cache.default') === 'redis' || config('session.driver') === 'redis' || config('queue.default') === 'redis') {
+            try {
+                Redis::connection()->ping();
+                $checks['redis'] = 'ok';
+            } catch (\Throwable $exception) {
+                $checks['redis'] = 'unavailable';
+            }
+        } else {
             $checks['redis'] = 'ok';
-        } catch (\Throwable $exception) {
-            $checks['redis'] = 'unavailable';
         }
 
         $healthy = ! in_array('unavailable', $checks, true);
