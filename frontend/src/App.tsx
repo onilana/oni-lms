@@ -1,18 +1,24 @@
 import { useEffect, useState } from 'react';
 import {
   Award,
+  BarChart3,
   BookOpen,
   ClipboardList,
   GraduationCap,
   LayoutDashboard,
   LogOut,
   LogIn,
+  Radio,
   ShieldCheck,
   UserCheck,
   Users,
   Building2,
   CalendarCheck,
-  FileQuestion
+  FileQuestion,
+  Sparkles,
+  Globe,
+  HardDrive,
+  ShieldAlert
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginModal } from './components/LoginModal';
@@ -24,16 +30,43 @@ import { ExamsView } from './components/ExamsView';
 import { StudentDashboardView } from './components/StudentDashboardView';
 import { AttendanceView } from './components/AttendanceView';
 import { CertificatesView } from './components/CertificatesView';
+import { LiveClassroomView } from './components/LiveClassroomView';
+import { AnalyticsView } from './components/AnalyticsView';
+import { AIAssistantView } from './components/AIAssistantView';
+import { WordPressIntegrationView } from './components/WordPressIntegrationView';
+import { UserDirectoryView } from './components/UserDirectoryView';
+import { AuditLogsView } from './components/AuditLogsView';
+import { BackupManagementView } from './components/BackupManagementView';
+import { TeacherDashboardView } from './components/TeacherDashboardView';
+import { DepartmentDashboardView } from './components/DepartmentDashboardView';
+import { AdminDashboardView } from './components/AdminDashboardView';
 import { apiRequest } from './api/client';
 import type { HealthStatus } from './types/auth';
 
 function MainApp() {
   const { user, logout, hasRole, hasPermission } = useAuth();
-  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses' | 'assignments' | 'exams' | 'attendance' | 'certificates'>('dashboard');
+  const [currentView, setCurrentView] = useState<'dashboard' | 'academic' | 'courses' | 'assignments' | 'exams' | 'attendance' | 'certificates' | 'live_classroom' | 'analytics' | 'ai_assistant' | 'wordpress' | 'users' | 'audit_logs' | 'backups'>('dashboard');
+  const [dashboardRoleMode, setDashboardRoleMode] = useState<'student' | 'teacher' | 'department' | 'admin'>('student');
   const [learningCourseId, setLearningCourseId] = useState<string | null>(null);
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthError, setHealthError] = useState('');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+
+  useEffect(() => {
+    if (user) {
+      if (user.roles.some((r) => r.name === 'super_admin' || r.name === 'college_admin')) {
+        setDashboardRoleMode('admin');
+      } else if (user.roles.some((r) => r.name === 'hod' || r.name === 'dept_admin')) {
+        setDashboardRoleMode('department');
+      } else if (user.roles.some((r) => r.name === 'teacher')) {
+        setDashboardRoleMode('teacher');
+      } else {
+        setDashboardRoleMode('student');
+      }
+    } else {
+      setDashboardRoleMode('student');
+    }
+  }, [user]);
 
   useEffect(() => {
     apiRequest<HealthStatus>('/health')
@@ -112,8 +145,32 @@ function MainApp() {
             >
               <Building2 size={18} /> Academic Setup
             </button>
-            <button className="nav-item" onClick={() => alert('User Directory scheduled for next sub-task')}>
+            <button
+              className={`nav-item ${currentView === 'users' && !learningCourseId ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentView('users');
+                setLearningCourseId(null);
+              }}
+            >
               <Users size={18} /> User Directory
+            </button>
+            <button
+              className={`nav-item ${currentView === 'audit_logs' && !learningCourseId ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentView('audit_logs');
+                setLearningCourseId(null);
+              }}
+            >
+              <ShieldAlert size={18} color="#ef4444" /> Security Audit Logs
+            </button>
+            <button
+              className={`nav-item ${currentView === 'backups' && !learningCourseId ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentView('backups');
+                setLearningCourseId(null);
+              }}
+            >
+              <HardDrive size={18} color="#10b981" /> Database &amp; Backups
             </button>
           </>
         )}
@@ -138,6 +195,46 @@ function MainApp() {
           <Award size={18} /> Certificates
         </button>
 
+        <button
+          className={`nav-item ${currentView === 'live_classroom' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('live_classroom');
+            setLearningCourseId(null);
+          }}
+        >
+          <Radio size={18} /> Live Classroom
+        </button>
+
+        <button
+          className={`nav-item ${currentView === 'analytics' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('analytics');
+            setLearningCourseId(null);
+          }}
+        >
+          <BarChart3 size={18} /> Analytics &amp; Reports
+        </button>
+
+        <button
+          className={`nav-item ${currentView === 'ai_assistant' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('ai_assistant');
+            setLearningCourseId(null);
+          }}
+        >
+          <Sparkles size={18} color="#eab308" /> AI Study Assistant
+        </button>
+
+        <button
+          className={`nav-item ${currentView === 'wordpress' && !learningCourseId ? 'active' : ''}`}
+          onClick={() => {
+            setCurrentView('wordpress');
+            setLearningCourseId(null);
+          }}
+        >
+          <Globe size={18} color="#38bdf8" /> WordPress (`oni_lana`)
+        </button>
+
         <div className="sidebar-footer">
           {user ? (
             <div className="user-sidebar-card">
@@ -155,7 +252,7 @@ function MainApp() {
               <span>Sign In</span>
             </button>
           )}
-          <div className="version-tag">Milestone 9 · Certificates &amp; Credentials</div>
+          <div className="version-tag">Blueprint v1.0 · Complete Architecture</div>
         </div>
       </aside>
 
@@ -176,7 +273,27 @@ function MainApp() {
                 ? 'Attendance & Session Logs'
                 : currentView === 'certificates'
                 ? 'Certificates & Degree Verification'
-                : 'Dashboard'}
+                : currentView === 'live_classroom'
+                ? 'Communication & Live Classroom'
+                : currentView === 'analytics'
+                ? 'Analytics & Academic Reporting'
+                : currentView === 'ai_assistant'
+                ? 'AI Learning Assistant (RAG)'
+                : currentView === 'wordpress'
+                ? 'WordPress Integration (oni_lana)'
+                : currentView === 'users'
+                ? 'Institutional User Directory'
+                : currentView === 'audit_logs'
+                ? 'Security & Institutional Audit Trail'
+                : currentView === 'backups'
+                ? 'Database Backup & Disaster Recovery'
+                : dashboardRoleMode === 'admin'
+                ? 'College Administration Console'
+                : dashboardRoleMode === 'department'
+                ? 'Department & HOD Academic Portal'
+                : dashboardRoleMode === 'teacher'
+                ? 'Faculty Instructional Dashboard'
+                : 'Student Learning Dashboard'}
             </h1>
           </div>
           <div className="topbar-actions">
@@ -208,6 +325,9 @@ function MainApp() {
         ) : (
           <>
             {currentView === 'academic' && <AcademicView />}
+            {currentView === 'users' && <UserDirectoryView />}
+            {currentView === 'audit_logs' && <AuditLogsView currentUser={user} />}
+            {currentView === 'backups' && <BackupManagementView currentUser={user} />}
             {currentView === 'courses' && (
               <CoursesView
                 onOpenLogin={() => setIsLoginOpen(true)}
@@ -218,16 +338,101 @@ function MainApp() {
             {currentView === 'exams' && <ExamsView />}
             {currentView === 'attendance' && <AttendanceView />}
             {currentView === 'certificates' && <CertificatesView currentUser={user} />}
+            {currentView === 'live_classroom' && <LiveClassroomView currentUser={user} />}
+            {currentView === 'analytics' && <AnalyticsView currentUser={user} />}
+            {currentView === 'ai_assistant' && <AIAssistantView currentUser={user} />}
+            {currentView === 'wordpress' && <WordPressIntegrationView currentUser={user} />}
             {currentView === 'dashboard' && (
               <>
-                <StudentDashboardView
-                  onOpenCourse={(cId) => setLearningCourseId(cId)}
-                  onNavigateTo={(view) => {
-                    setCurrentView(view);
-                    setLearningCourseId(null);
-                  }}
-                  onOpenLogin={() => setIsLoginOpen(true)}
-                />
+                {user && (
+                  <div
+                    className="dashboard-portal-switcher"
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '12px',
+                      marginBottom: '20px',
+                      background: 'var(--surface-subtle)',
+                      padding: '8px 14px',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>
+                      PORTAL SWITCHER:
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      <button
+                        className={`btn btn-sm ${dashboardRoleMode === 'student' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setDashboardRoleMode('student')}
+                      >
+                        <GraduationCap size={14} /> Student Portal
+                      </button>
+                      <button
+                        className={`btn btn-sm ${dashboardRoleMode === 'teacher' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setDashboardRoleMode('teacher')}
+                      >
+                        <BookOpen size={14} /> Faculty / Teacher
+                      </button>
+                      <button
+                        className={`btn btn-sm ${dashboardRoleMode === 'department' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setDashboardRoleMode('department')}
+                      >
+                        <Building2 size={14} /> Department / HOD
+                      </button>
+                      <button
+                        className={`btn btn-sm ${dashboardRoleMode === 'admin' ? 'btn-primary' : 'btn-secondary'}`}
+                        onClick={() => setDashboardRoleMode('admin')}
+                      >
+                        <ShieldCheck size={14} /> Institutional Admin
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {dashboardRoleMode === 'admin' && (
+                  <AdminDashboardView
+                    currentUser={user}
+                    onNavigateTo={(view) => {
+                      setCurrentView(view);
+                      setLearningCourseId(null);
+                    }}
+                  />
+                )}
+
+                {dashboardRoleMode === 'department' && (
+                  <DepartmentDashboardView
+                    currentUser={user}
+                    onNavigateTo={(view) => {
+                      setCurrentView(view);
+                      setLearningCourseId(null);
+                    }}
+                  />
+                )}
+
+                {dashboardRoleMode === 'teacher' && (
+                  <TeacherDashboardView
+                    currentUser={user}
+                    onNavigateTo={(view) => {
+                      setCurrentView(view);
+                      setLearningCourseId(null);
+                    }}
+                    onOpenCourse={(cId) => setLearningCourseId(cId)}
+                  />
+                )}
+
+                {dashboardRoleMode === 'student' && (
+                  <StudentDashboardView
+                    onOpenCourse={(cId) => setLearningCourseId(cId)}
+                    onNavigateTo={(view) => {
+                      setCurrentView(view);
+                      setLearningCourseId(null);
+                    }}
+                    onOpenLogin={() => setIsLoginOpen(true)}
+                  />
+                )}
 
                 {/* System & Architecture Status Panel (Staff & Verification) */}
                 <section className="panel" style={{ marginTop: '36px' }}>
@@ -262,7 +467,7 @@ function MainApp() {
       </>
     )}
 
-        <p className="footnote">ONI Learning Management System · Epics 1 to 9 Operational (Certificates, Attendance, Exams, RBAC)</p>
+        <p className="footnote">ONI Learning Management System · College Technical Blueprint Architecture v1.0 Operational</p>
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />

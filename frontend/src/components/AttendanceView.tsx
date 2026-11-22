@@ -60,6 +60,15 @@ export const AttendanceView: React.FC = () => {
   const [topic, setTopic] = useState('');
   const [room, setRoom] = useState('Hall 3B');
 
+  // Edit session modal
+  const [editingSession, setEditingSession] = useState<AttendanceSession | null>(null);
+  const [editSessionDate, setEditSessionDate] = useState('');
+  const [editStartTime, setEditStartTime] = useState('09:00');
+  const [editEndTime, setEditEndTime] = useState('10:00');
+  const [editTopic, setEditTopic] = useState('');
+  const [editRoom, setEditRoom] = useState('');
+  const [editStatus, setEditStatus] = useState<'scheduled' | 'ongoing' | 'completed' | 'cancelled'>('completed');
+
   // Active roster marking modal
   const [markingSession, setMarkingSession] = useState<AttendanceSession | null>(null);
   const [rosterDraft, setRosterDraft] = useState<Record<string, { status: AttendanceStatus; remarks: string }>>({});
@@ -151,6 +160,41 @@ export const AttendanceView: React.FC = () => {
       loadCourseSummary(selectedCourseId);
     } catch (err: any) {
       alert(err.message || 'Failed to create session');
+    }
+  };
+
+  const openEditSession = (sess: AttendanceSession) => {
+    setEditingSession(sess);
+    setEditSessionDate(sess.session_date);
+    setEditStartTime(sess.start_time || '09:00');
+    setEditEndTime(sess.end_time || '10:00');
+    setEditTopic(sess.topic || '');
+    setEditRoom(sess.room || '');
+    setEditStatus((sess.status as any) || 'completed');
+  };
+
+  const handleUpdateSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession) return;
+    try {
+      await apiRequest(`/attendance/sessions/${editingSession.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          session_date: editSessionDate,
+          start_time: editStartTime,
+          end_time: editEndTime,
+          topic: editTopic,
+          room: editRoom,
+          status: editStatus,
+        }),
+      });
+
+      setEditingSession(null);
+      if (selectedCourseId) {
+        loadSessions(selectedCourseId);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating attendance session');
     }
   };
 
@@ -447,12 +491,20 @@ export const AttendanceView: React.FC = () => {
                   </div>
                 )}
 
-                <div className="session-card-actions">
+                <div className="session-card-actions" style={{ display: 'flex', gap: '8px' }}>
                   <button
-                    className="btn btn-secondary btn-block"
+                    className="btn btn-secondary btn-sm"
+                    style={{ flex: 1 }}
                     onClick={() => openMarkingModal(sess)}
                   >
-                    <Edit size={14} /> Open Roster & Edit Marks
+                    <Edit size={14} /> Mark Roster
+                  </button>
+                  <button
+                    className="btn btn-outline btn-sm"
+                    title="Edit Session Details"
+                    onClick={() => openEditSession(sess)}
+                  >
+                    <Edit size={14} /> Edit Session
                   </button>
                 </div>
               </div>
@@ -587,6 +639,104 @@ export const AttendanceView: React.FC = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Save & Initialize Roster
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Session Modal */}
+      {editingSession && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h3>Edit Attendance Session</h3>
+              <button className="btn-icon" onClick={() => setEditingSession(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateSession}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Date</label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={editSessionDate}
+                    onChange={(e) => setEditSessionDate(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="field-row">
+                  <div className="form-group">
+                    <label>Start Time</label>
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={editStartTime}
+                      onChange={(e) => setEditStartTime(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>End Time</label>
+                    <input
+                      type="time"
+                      className="form-control"
+                      value={editEndTime}
+                      onChange={(e) => setEditEndTime(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Lecture Topic / Session Title</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Lecture 4: Stacks and Queue Principles"
+                    value={editTopic}
+                    onChange={(e) => setEditTopic(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Classroom / Laboratory</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Hall 3B or Lab 204"
+                    value={editRoom}
+                    onChange={(e) => setEditRoom(e.target.value)}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Session Status</label>
+                  <select
+                    className="form-control"
+                    value={editStatus}
+                    onChange={(e) => setEditStatus(e.target.value as any)}
+                  >
+                    <option value="scheduled">Scheduled</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingSession(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
                 </button>
               </div>
             </form>

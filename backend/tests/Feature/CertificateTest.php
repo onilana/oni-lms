@@ -310,4 +310,57 @@ class CertificateTest extends TestCase
                 'revocation_reason' => 'Administrative integrity audit check.',
             ]);
     }
+
+    public function test_admin_can_update_certificate(): void
+    {
+        $issueResponse = $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/v1/certificates/issue', [
+                'student_id' => $this->student->id,
+                'course_id' => $this->course->id,
+                'force' => true,
+            ]);
+
+        $certId = $issueResponse->json('data.id');
+
+        $updateResponse = $this->actingAs($this->admin, 'sanctum')
+            ->putJson("/api/v1/certificates/{$certId}", [
+                'title' => 'Certificate of Advanced Excellence',
+                'grade' => 'Distinction',
+                'final_score' => 96.5,
+                'attendance_percentage' => 98.0,
+            ]);
+
+        $updateResponse->assertStatus(200)
+            ->assertJsonPath('data.title', 'Certificate of Advanced Excellence')
+            ->assertJsonPath('data.grade', 'Distinction');
+
+        $this->assertEquals(96.5, $updateResponse->json('data.final_score'));
+        $this->assertEquals(98.0, $updateResponse->json('data.attendance_percentage'));
+
+        $this->assertDatabaseHas('certificates', [
+            'id' => $certId,
+            'title' => 'Certificate of Advanced Excellence',
+            'grade' => 'Distinction',
+        ]);
+    }
+
+    public function test_admin_can_list_certificates(): void
+    {
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/v1/certificates/issue', [
+                'student_id' => $this->student->id,
+                'course_id' => $this->course->id,
+                'force' => true,
+            ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/certificates');
+
+        $response->assertStatus(200)
+            ->assertJsonStructure([
+                'data' => [
+                    '*' => ['id', 'certificate_code', 'title', 'grade', 'student', 'course'],
+                ],
+            ]);
+    }
 }

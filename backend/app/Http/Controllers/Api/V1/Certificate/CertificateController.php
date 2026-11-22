@@ -45,6 +45,28 @@ class CertificateController
         ]);
     }
 
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        $query = Certificate::with(['course', 'user', 'issuedBy', 'revokedBy'])->orderBy('created_at', 'desc');
+
+        if ($request->filled('course_id')) {
+            $query->where('course_id', $request->query('course_id'));
+        }
+
+        if ($request->filled('search')) {
+            $term = $request->query('search');
+            $query->where(function ($q) use ($term) {
+                $q->where('certificate_code', 'like', "%{$term}%")
+                    ->orWhere('title', 'like', "%{$term}%")
+                    ->orWhereHas('user', function ($uq) use ($term) {
+                        $uq->where('name', 'like', "%{$term}%")->orWhere('email', 'like', "%{$term}%");
+                    });
+            });
+        }
+
+        return CertificateResource::collection($query->paginate(25));
+    }
+
     public function myCertificates(Request $request): AnonymousResourceCollection
     {
         $certificates = Certificate::with(['course', 'user', 'issuedBy'])
@@ -141,6 +163,36 @@ class CertificateController
 
         return response()->json([
             'message' => 'Certificate revoked successfully.',
+            'data' => new CertificateResource($certificate->load(['course', 'user', 'issuedBy', 'revokedBy'])),
+        ]);
+    }
+
+    public function update(Request $request, Certificate $certificate): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user->hasRole([Role::COLLEGE_ADMIN, Role::SUPER_ADMIN])) {
+            return response()->json(['message' => 'Only administrators can edit certificate records.'], 403);
+        }
+
+        $validated = $request->validate([
+            'title' => 'sometimes|required|string|max:255',
+            'grade' => 'sometimes|nullable|string|max:32',
+            'final_score' => 'sometimes|nullable|numeric|between:0,100',
+            'attendance_percentage' => 'sometimes|nullable|numeric|between:0,100',
+            'is_revoked' => 'sometimes|boolean',
+            'revocation_reason' => 'sometimes|nullable|string|max:1000',
+        ]);
+
+        if (isset($validated['is_revoked']) && !$validated['is_revoked'] && $certificate->is_revoked) {
+            $validated['revoked_at'] = null;
+            $validated['revoked_by_id'] = null;
+            $validated['revocation_reason'] = null;
+        }
+
+        $certificate->update($validated);
+
+        return response()->json([
+            'message' => 'Certificate updated successfully.',
             'data' => new CertificateResource($certificate->load(['course', 'user', 'issuedBy', 'revokedBy'])),
         ]);
     }

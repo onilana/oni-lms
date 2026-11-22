@@ -1,0 +1,811 @@
+import React, { useEffect, useState } from 'react';
+import {
+  AlertTriangle,
+  CheckCircle,
+  Edit2,
+  GraduationCap,
+  KeyRound,
+  Mail,
+  Plus,
+  RefreshCw,
+  Search,
+  Shield,
+  ShieldAlert,
+  Trash2,
+  UserCheck,
+  UserPlus,
+  Users,
+  X,
+  XCircle
+} from 'lucide-react';
+import { apiRequest } from '../api/client';
+import type { User, Role } from '../types/auth';
+import type { Department, Programme, Batch } from '../types/academic';
+import { useAuth } from '../context/AuthContext';
+
+export const UserDirectoryView: React.FC = () => {
+  const { user: authUser, hasRole } = useAuth();
+  const isSuperAdmin = hasRole('super_admin');
+
+  const [users, setUsers] = useState<User[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [programmes, setProgrammes] = useState<Programme[]>([]);
+  const [batches, setBatches] = useState<Batch[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
+  const [statusFilter, setStatusFilter] = useState('');
+  const [deptFilter, setDeptFilter] = useState('');
+
+  // Modals
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [resettingUser, setResettingUser] = useState<User | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+
+  // Create Form State
+  const [createName, setCreateName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createPassword, setCreatePassword] = useState('Campus@2026!');
+  const [createRole, setCreateRole] = useState('student');
+  const [createStatus, setCreateStatus] = useState('active');
+  const [createDeptId, setCreateDeptId] = useState('');
+  const [createEmpId, setCreateEmpId] = useState('');
+  const [createDesignation, setCreateDesignation] = useState('Faculty Member');
+  const [createProgId, setCreateProgId] = useState('');
+  const [createBatchId, setCreateBatchId] = useState('');
+  const [createStudentId, setCreateStudentId] = useState('');
+  const [createSemester, setCreateSemester] = useState(1);
+
+  // Edit Form State
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editStatus, setEditStatus] = useState('active');
+  const [editRole, setEditRole] = useState('');
+  const [editDeptId, setEditDeptId] = useState('');
+  const [editEmpId, setEditEmpId] = useState('');
+  const [editDesignation, setEditDesignation] = useState('');
+  const [editProgId, setEditProgId] = useState('');
+  const [editBatchId, setEditBatchId] = useState('');
+  const [editStudentId, setEditStudentId] = useState('');
+  const [editSemester, setEditSemester] = useState(1);
+
+  const fetchUsers = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const queryParams = new URLSearchParams();
+      if (roleFilter !== 'all') {
+        if (roleFilter === 'admin') {
+          queryParams.set('role', 'super_admin');
+        } else {
+          queryParams.set('role', roleFilter);
+        }
+      }
+      if (statusFilter) {
+        queryParams.set('status', statusFilter);
+      }
+      if (deptFilter) {
+        queryParams.set('department_id', deptFilter);
+      }
+      if (searchTerm) {
+        queryParams.set('search', searchTerm);
+      }
+
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+      const [usersRes, rolesRes, deptRes, progRes, batchRes] = await Promise.all([
+        apiRequest<{ data: User[] }>(`/users${queryString}`),
+        apiRequest<{ roles: Role[] }>('/roles').catch(() => ({ roles: [] })),
+        apiRequest<{ departments: Department[] }>('/academic/departments').catch(() => ({ departments: [] })),
+        apiRequest<{ programmes: Programme[] }>('/academic/programmes').catch(() => ({ programmes: [] })),
+        apiRequest<{ batches: Batch[] }>('/academic/batches').catch(() => ({ batches: [] })),
+      ]);
+
+      setUsers(usersRes.data);
+      if (rolesRes.roles.length > 0) setRoles(rolesRes.roles);
+      if (deptRes.departments.length > 0) setDepartments(deptRes.departments);
+      if (progRes.programmes.length > 0) setProgrammes(progRes.programmes);
+      if (batchRes.batches.length > 0) setBatches(batchRes.batches);
+    } catch (err: any) {
+      setError(err.message || 'Failed to load user directory.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsers();
+  }, [roleFilter, statusFilter, deptFilter]);
+
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchUsers();
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiRequest('/users', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: createName,
+          email: createEmail,
+          password: createPassword,
+          role: createRole,
+          status: createStatus,
+          department_id: createDeptId || null,
+          employee_id_number: createEmpId || null,
+          designation: createDesignation || null,
+          programme_id: createProgId || null,
+          batch_id: createBatchId || null,
+          student_id_number: createStudentId || null,
+          current_semester: createSemester,
+        }),
+      });
+
+      setSuccessMsg(`User "${createName}" created successfully.`);
+      setIsCreateOpen(false);
+      setCreateName('');
+      setCreateEmail('');
+      setCreatePassword('Campus@2026!');
+      setCreateStudentId('');
+      setCreateEmpId('');
+      await fetchUsers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to create user');
+    }
+  };
+
+  const openEditModal = (u: User) => {
+    setEditingUser(u);
+    setEditName(u.name);
+    setEditEmail(u.email);
+    setEditStatus(u.status);
+    setEditRole(u.roles[0]?.name || 'student');
+    setEditDeptId(u.teacher_profile?.department_id || '');
+    setEditEmpId(u.teacher_profile?.employee_id_number || '');
+    setEditDesignation(u.teacher_profile?.designation || 'Faculty Member');
+    setEditProgId(u.student_profile?.programme_id || '');
+    setEditBatchId(u.student_profile?.batch_id || '');
+    setEditStudentId(u.student_profile?.student_id_number || '');
+    setEditSemester(u.student_profile?.current_semester || 1);
+  };
+
+  const handleUpdateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    try {
+      await apiRequest(`/users/${editingUser.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: editName,
+          email: editEmail,
+          status: editStatus,
+          role: editRole,
+          department_id: editDeptId || null,
+          employee_id_number: editEmpId || null,
+          designation: editDesignation || null,
+          programme_id: editProgId || null,
+          batch_id: editBatchId || null,
+          student_id_number: editStudentId || null,
+          current_semester: editSemester,
+        }),
+      });
+
+      setSuccessMsg(`User "${editName}" updated successfully.`);
+      setEditingUser(null);
+      await fetchUsers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to update user');
+    }
+  };
+
+  const handleResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resettingUser) return;
+    if (newPassword.length < 8) {
+      alert('Password must be at least 8 characters.');
+      return;
+    }
+    try {
+      await apiRequest(`/users/${resettingUser.id}/reset-password`, {
+        method: 'POST',
+        body: JSON.stringify({ password: newPassword }),
+      });
+      setSuccessMsg(`Password reset successfully for ${resettingUser.name}.`);
+      setResettingUser(null);
+      setNewPassword('');
+    } catch (err: any) {
+      alert(err.message || 'Failed to reset password');
+    }
+  };
+
+  const handleDeleteUser = async (u: User) => {
+    if (u.id === authUser?.id) {
+      alert('You cannot delete your own logged-in account.');
+      return;
+    }
+    if (!confirm(`Are you sure you want to remove user "${u.name}" (${u.email})?`)) {
+      return;
+    }
+    try {
+      await apiRequest(`/users/${u.id}`, { method: 'DELETE' });
+      setSuccessMsg(`User ${u.name} has been removed.`);
+      await fetchUsers();
+    } catch (err: any) {
+      alert(err.message || 'Failed to delete user');
+    }
+  };
+
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map((part) => part[0])
+      .join('')
+      .substring(0, 2)
+      .toUpperCase();
+  };
+
+  const getRoleBadgeClass = (roleName?: string) => {
+    switch (roleName) {
+      case 'super_admin':
+      case 'college_admin':
+        return 'badge-role-admin';
+      case 'dept_admin':
+        return 'badge-role-dept';
+      case 'teacher':
+        return 'badge-role-teacher';
+      case 'student':
+        return 'badge-role-student';
+      default:
+        return 'badge-role-default';
+    }
+  };
+
+  return (
+    <div className="user-directory-view">
+      <div className="view-header">
+        <div>
+          <h2>User Directory &amp; Campus Access</h2>
+          <p>Institutional identity management, faculty &amp; student records, credentials, and RBAC authorization</p>
+        </div>
+        <div className="view-actions">
+          <button className="btn btn-secondary" onClick={() => fetchUsers()} title="Refresh Directory">
+            <RefreshCw size={15} className={loading ? 'spin' : ''} />
+            <span>Refresh</span>
+          </button>
+          <button className="btn btn-primary" onClick={() => setIsCreateOpen(true)}>
+            <UserPlus size={16} />
+            <span>New User</span>
+          </button>
+        </div>
+      </div>
+
+      {successMsg && (
+        <div className="alert alert-success" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>{successMsg}</span>
+          <button className="btn-close" onClick={() => setSuccessMsg(null)}><X size={15} /></button>
+        </div>
+      )}
+
+      {error && <div className="alert alert-error">{error}</div>}
+
+      {/* Directory Toolbar */}
+      <div className="courses-toolbar" style={{ marginBottom: '1.25rem' }}>
+        <form onSubmit={handleSearchSubmit} className="search-wrap" style={{ flex: 1 }}>
+          <Search size={16} className="search-icon" />
+          <input
+            type="text"
+            placeholder="Search by name, email, student ID, or employee ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+        </form>
+
+        <div className="filter-group">
+          <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
+            <option value="">All Departments</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+            ))}
+          </select>
+
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
+            <option value="">All Statuses</option>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </select>
+
+          <div className="view-toggle">
+            <button
+              className={`toggle-btn ${roleFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setRoleFilter('all')}
+            >
+              All ({users.length})
+            </button>
+            <button
+              className={`toggle-btn ${roleFilter === 'student' ? 'active' : ''}`}
+              onClick={() => setRoleFilter('student')}
+            >
+              Students
+            </button>
+            <button
+              className={`toggle-btn ${roleFilter === 'teacher' ? 'active' : ''}`}
+              onClick={() => setRoleFilter('teacher')}
+            >
+              Faculty
+            </button>
+            <button
+              className={`toggle-btn ${roleFilter === 'admin' ? 'active' : ''}`}
+              onClick={() => setRoleFilter('admin')}
+            >
+              Admins
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Directory Table */}
+      {loading ? (
+        <p>Loading user directory records...</p>
+      ) : users.length === 0 ? (
+        <div className="empty-state">
+          <Users size={48} className="empty-state-icon" />
+          <h3>No users found</h3>
+          <p>Try refining your search terms or register a new campus user above.</p>
+        </div>
+      ) : (
+        <div className="table-wrap">
+          <table className="data-table">
+            <thead>
+              <tr>
+                <th>User / Identity</th>
+                <th>Role &amp; Access</th>
+                <th>Academic Affiliation</th>
+                <th>Identifier ID</th>
+                <th>Courses / Load</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {users.map((u) => {
+                const primaryRole = u.roles[0]?.name;
+                const roleLabel = u.roles[0]?.label || primaryRole || 'Member';
+                const isStudent = primaryRole === 'student';
+                const isFaculty = primaryRole === 'teacher';
+
+                return (
+                  <tr key={u.id}>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <div
+                          style={{
+                            width: '38px',
+                            height: '38px',
+                            borderRadius: '50%',
+                            background: '#3b82f6',
+                            color: '#ffffff',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 600,
+                            fontSize: '13px',
+                          }}
+                        >
+                          {getInitials(u.name)}
+                        </div>
+                        <div>
+                          <strong>{u.name}</strong>
+                          <small style={{ display: 'block', color: '#64748b' }}>{u.email}</small>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td>
+                      <span className={`badge ${getRoleBadgeClass(primaryRole)}`}>
+                        {roleLabel}
+                      </span>
+                    </td>
+
+                    <td>
+                      {isFaculty ? (
+                        <span>
+                          <strong>{u.teacher_profile?.department_name || 'Faculty'}</strong>
+                          <small style={{ display: 'block', color: '#64748b' }}>
+                            {u.teacher_profile?.designation || 'Instructor'}
+                          </small>
+                        </span>
+                      ) : isStudent ? (
+                        <span>
+                          <strong>{u.student_profile?.programme_name || 'Degree Programme'}</strong>
+                          <small style={{ display: 'block', color: '#64748b' }}>
+                            Semester {u.student_profile?.current_semester ?? 1} · {u.student_profile?.batch_name || 'Active Batch'}
+                          </small>
+                        </span>
+                      ) : (
+                        <span className="text-muted">Institutional Administration</span>
+                      )}
+                    </td>
+
+                    <td>
+                      {isStudent && u.student_profile?.student_id_number ? (
+                        <code>{u.student_profile.student_id_number}</code>
+                      ) : isFaculty && u.teacher_profile?.employee_id_number ? (
+                        <code>{u.teacher_profile.employee_id_number}</code>
+                      ) : (
+                        <small className="text-muted">{u.id.substring(0, 8)}...</small>
+                      )}
+                    </td>
+
+                    <td>
+                      {isFaculty ? (
+                        <span>{u.taught_courses_count ?? 0} Courses Taught</span>
+                      ) : (
+                        <span>{u.enrolled_courses_count ?? 0} Enrolled</span>
+                      )}
+                    </td>
+
+                    <td>
+                      <span className={`status ${u.status === 'active' ? 'ok' : u.status === 'suspended' ? 'danger' : 'pending'}`}>
+                        {u.status}
+                      </span>
+                    </td>
+
+                    <td>
+                      <div style={{ display: 'flex', gap: '6px' }}>
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          title="Edit Profile"
+                          onClick={() => openEditModal(u)}
+                        >
+                          <Edit2 size={13} /> Edit
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-secondary btn-sm"
+                          title="Reset Password"
+                          onClick={() => {
+                            setResettingUser(u);
+                            setNewPassword('');
+                          }}
+                        >
+                          <KeyRound size={13} />
+                        </button>
+                        {isSuperAdmin && u.id !== authUser?.id && (
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm"
+                            style={{ color: '#ef4444' }}
+                            title="Remove User"
+                            onClick={() => handleDeleteUser(u)}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* CREATE USER MODAL */}
+      {isCreateOpen && (
+        <div className="modal-backdrop" onClick={() => setIsCreateOpen(false)}>
+          <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Register New User</h3>
+                <p>Create a campus identity and provision student or teacher profile</p>
+              </div>
+              <button className="btn-close" onClick={() => setIsCreateOpen(false)}><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleCreateUser} className="modal-form">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input
+                    required
+                    placeholder="e.g. Eleanor Vance"
+                    value={createName}
+                    onChange={(e) => setCreateName(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    placeholder="e.g. eleanor.vance@onilms.edu"
+                    value={createEmail}
+                    onChange={(e) => setCreateEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Temporary Password</label>
+                  <input
+                    type="password"
+                    required
+                    minLength={8}
+                    value={createPassword}
+                    onChange={(e) => setCreatePassword(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Primary Role</label>
+                  <select value={createRole} onChange={(e) => setCreateRole(e.target.value)}>
+                    <option value="student">Student</option>
+                    <option value="teacher">Teacher / Faculty</option>
+                    <option value="dept_admin">Department Administrator</option>
+                    <option value="college_admin">College Administrator</option>
+                    <option value="super_admin">Super Administrator</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={createStatus} onChange={(e) => setCreateStatus(e.target.value)}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Dynamic Profile Fields based on selected role */}
+              {createRole === 'student' && (
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Profile Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label>Degree Programme</label>
+                      <select value={createProgId} onChange={(e) => setCreateProgId(e.target.value)}>
+                        <option value="">Select Programme...</option>
+                        {programmes.map((p) => (
+                          <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Student ID Number</label>
+                      <input
+                        placeholder="e.g. STU-2026-0042"
+                        value={createStudentId}
+                        onChange={(e) => setCreateStudentId(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Starting Semester</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={16}
+                        value={createSemester}
+                        onChange={(e) => setCreateSemester(parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(createRole === 'teacher' || createRole === 'dept_admin') && (
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Faculty Profile Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select value={createDeptId} onChange={(e) => setCreateDeptId(e.target.value)}>
+                        <option value="">Select Department...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Employee ID Number</label>
+                      <input
+                        placeholder="e.g. FAC-2026-018"
+                        value={createEmpId}
+                        onChange={(e) => setCreateEmpId(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Designation</label>
+                      <input
+                        placeholder="e.g. Associate Professor"
+                        value={createDesignation}
+                        onChange={(e) => setCreateDesignation(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '14px' }}>
+                Provision Campus Account
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT USER MODAL */}
+      {editingUser && (
+        <div className="modal-backdrop" onClick={() => setEditingUser(null)}>
+          <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Edit User: {editingUser.name}</h3>
+                <p>Update identity details, role permissions, and academic assignments</p>
+              </div>
+              <button className="btn-close" onClick={() => setEditingUser(null)}><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleUpdateUser} className="modal-form">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Full Name</label>
+                  <input
+                    required
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={editEmail}
+                    onChange={(e) => setEditEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Primary Role</label>
+                  <select value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                    <option value="student">Student</option>
+                    <option value="teacher">Teacher / Faculty</option>
+                    <option value="dept_admin">Department Administrator</option>
+                    <option value="college_admin">College Administrator</option>
+                    <option value="super_admin">Super Administrator</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Account Status</label>
+                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value)}>
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                    <option value="suspended">Suspended</option>
+                  </select>
+                </div>
+              </div>
+
+              {editRole === 'student' && (
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Profile Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label>Degree Programme</label>
+                      <select value={editProgId} onChange={(e) => setEditProgId(e.target.value)}>
+                        <option value="">Select Programme...</option>
+                        {programmes.map((p) => (
+                          <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Student ID Number</label>
+                      <input
+                        placeholder="e.g. STU-2026-0042"
+                        value={editStudentId}
+                        onChange={(e) => setEditStudentId(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Current Semester</label>
+                      <input
+                        type="number"
+                        min={1}
+                        max={16}
+                        value={editSemester}
+                        onChange={(e) => setEditSemester(parseInt(e.target.value) || 1)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(editRole === 'teacher' || editRole === 'dept_admin') && (
+                <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Faculty Profile Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select value={editDeptId} onChange={(e) => setEditDeptId(e.target.value)}>
+                        <option value="">Select Department...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Employee ID Number</label>
+                      <input
+                        placeholder="e.g. FAC-2026-018"
+                        value={editEmpId}
+                        onChange={(e) => setEditEmpId(e.target.value)}
+                      />
+                    </div>
+                    <div className="form-group">
+                      <label>Designation</label>
+                      <input
+                        placeholder="e.g. Associate Professor"
+                        value={editDesignation}
+                        onChange={(e) => setEditDesignation(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" className="btn btn-primary btn-block" style={{ marginTop: '14px' }}>
+                Save Profile Changes
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* RESET PASSWORD MODAL */}
+      {resettingUser && (
+        <div className="modal-backdrop" onClick={() => setResettingUser(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Reset Password: {resettingUser.name}</h3>
+                <small className="text-muted">{resettingUser.email}</small>
+              </div>
+              <button className="btn-close" onClick={() => setResettingUser(null)}><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleResetPassword} className="modal-form">
+              <div className="form-group">
+                <label>New Account Password (Min 8 Characters)</label>
+                <input
+                  type="password"
+                  required
+                  minLength={8}
+                  placeholder="Enter new secure password..."
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block">
+                Set New Password
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};

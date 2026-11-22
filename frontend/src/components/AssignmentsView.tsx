@@ -65,6 +65,16 @@ export const AssignmentsView: React.FC = () => {
   const [createMaxScore, setCreateMaxScore] = useState(100);
   const [createType, setCreateType] = useState<'text' | 'file' | 'both'>('both');
 
+  // Edit assignment modal
+  const [editingAssignment, setEditingAssignment] = useState<Assignment | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editInstructions, setEditInstructions] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editMaxScore, setEditMaxScore] = useState(100);
+  const [editType, setEditType] = useState<'text' | 'file' | 'both'>('both');
+  const [editStatus, setEditStatus] = useState<'draft' | 'published' | 'closed'>('published');
+
   const selectedCourseIdRef = useRef(selectedCourseId);
   selectedCourseIdRef.current = selectedCourseId;
   const assignmentLoadIdRef = useRef(0);
@@ -378,6 +388,47 @@ export const AssignmentsView: React.FC = () => {
     }
   };
 
+  const handleOpenEdit = (a: Assignment) => {
+    setEditingAssignment(a);
+    setEditTitle(a.title);
+    setEditDesc(a.description || '');
+    setEditInstructions(a.instructions || '');
+    try {
+      const dt = new Date(a.due_date);
+      const localIso = new Date(dt.getTime() - dt.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+      setEditDueDate(localIso);
+    } catch {
+      setEditDueDate('');
+    }
+    setEditMaxScore(a.max_score);
+    setEditType(a.submission_type);
+    setEditStatus((a.status as any) || 'published');
+  };
+
+  const handleUpdateAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingAssignment) return;
+    try {
+      await apiRequest(`/assignments/${editingAssignment.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDesc,
+          instructions: editInstructions,
+          due_date: localDateTimeToUtc(editDueDate),
+          max_score: editMaxScore,
+          submission_type: editType,
+          status: editStatus,
+        }),
+      });
+
+      setEditingAssignment(null);
+      await fetchAssignments();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error updating assignment');
+    }
+  };
+
   return (
     <div className="assignments-view">
       <div className="view-header">
@@ -457,12 +508,22 @@ export const AssignmentsView: React.FC = () => {
 
                 <div className="assignment-card-footer">
                   {isStaff ? (
-                    <button
-                      className="btn btn-secondary btn-sm btn-block"
-                      onClick={() => handleOpenGrading(a)}
-                    >
-                      <UserCheck size={14} /> Review Submissions ({a.submissions_count ?? 0})
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        style={{ flex: 1 }}
+                        onClick={() => handleOpenGrading(a)}
+                      >
+                        <UserCheck size={14} /> Submissions ({a.submissions_count ?? 0})
+                      </button>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        title="Edit Assignment"
+                        onClick={() => handleOpenEdit(a)}
+                      >
+                        <FileEdit size={14} /> Edit
+                      </button>
+                    </div>
                   ) : hasSubmitted ? (
                     <button
                       className="btn btn-secondary btn-sm btn-block"
@@ -752,6 +813,93 @@ export const AssignmentsView: React.FC = () => {
 
               <button type="submit" className="btn btn-primary btn-block">
                 Publish Assignment
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Assignment */}
+      {editingAssignment && (
+        <div className="modal-backdrop" onClick={() => setEditingAssignment(null)}>
+          <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Assignment: {editingAssignment.title}</h3>
+              <button className="btn-close" onClick={() => setEditingAssignment(null)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleUpdateAssignment} className="modal-form">
+              <div className="form-group">
+                <label>Assignment Title</label>
+                <input
+                  required
+                  placeholder="e.g. Programming Lab 2: Binary Search Tree"
+                  value={editTitle}
+                  onChange={(e) => setEditTitle(e.target.value)}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Due Date & Time</label>
+                  <input
+                    type="datetime-local"
+                    required
+                    value={editDueDate}
+                    onChange={(e) => setEditDueDate(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Maximum Points</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={editMaxScore}
+                    onChange={(e) => setEditMaxScore(parseInt(e.target.value) || 100)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Submission Format</label>
+                  <select value={editType} onChange={(e) => setEditType(e.target.value as 'text' | 'file' | 'both')}>
+                    <option value="both">Both (Text or File Attachment)</option>
+                    <option value="text">Text / Code Only</option>
+                    <option value="file">File Attachment Only</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as 'draft' | 'published' | 'closed')}>
+                    <option value="published">Published (Open for Submissions)</option>
+                    <option value="draft">Draft (Hidden)</option>
+                    <option value="closed">Closed</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Short Description</label>
+                <input
+                  placeholder="Summary of assignment goals..."
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Detailed Instructions & Rubric</label>
+                <textarea
+                  rows={4}
+                  placeholder="Step 1: Download starter code...&#10;Step 2: Implement algorithms...&#10;Step 3: Run unit tests..."
+                  value={editInstructions}
+                  onChange={(e) => setEditInstructions(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block">
+                Save Assignment Changes
               </button>
             </form>
           </div>

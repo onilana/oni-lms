@@ -8,10 +8,11 @@ import {
   RefreshCw,
   Users,
   CheckCircle2,
+  Edit2,
   X
 } from 'lucide-react';
 import { apiRequest, ApiError } from '../api/client';
-import type { Department, Programme, AcademicSession, Batch } from '../types/academic';
+import type { Department, Programme, AcademicSession, Batch, Semester } from '../types/academic';
 import { useAuth } from '../context/AuthContext';
 
 export const AcademicView: React.FC = () => {
@@ -39,6 +40,30 @@ export const AcademicView: React.FC = () => {
   const [progCode, setProgCode] = useState('');
   const [progYears, setProgYears] = useState(4);
   const [progSems, setProgSems] = useState(8);
+
+  // Edit Department modal
+  const [editingDept, setEditingDept] = useState<Department | null>(null);
+  const [editDeptName, setEditDeptName] = useState('');
+  const [editDeptCode, setEditDeptCode] = useState('');
+  const [editDeptDesc, setEditDeptDesc] = useState('');
+  const [editDeptStatus, setEditDeptStatus] = useState('active');
+
+  // Semester modals (Edit & Create)
+  const [editingSemester, setEditingSemester] = useState<Semester | null>(null);
+  const [editSemName, setEditSemName] = useState('');
+  const [editSemNumber, setEditSemNumber] = useState(1);
+  const [editSemStart, setEditSemStart] = useState('');
+  const [editSemEnd, setEditSemEnd] = useState('');
+  const [editSemActive, setEditSemActive] = useState(false);
+  const [editSemSessionId, setEditSemSessionId] = useState('');
+
+  const [isNewSemModalOpen, setIsNewSemModalOpen] = useState(false);
+  const [newSemSessionId, setNewSemSessionId] = useState('');
+  const [newSemName, setNewSemName] = useState('');
+  const [newSemNumber, setNewSemNumber] = useState(1);
+  const [newSemStart, setNewSemStart] = useState('');
+  const [newSemEnd, setNewSemEnd] = useState('');
+  const [newSemActive, setNewSemActive] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -115,6 +140,99 @@ export const AcademicView: React.FC = () => {
       await fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating programme');
+    }
+  };
+
+  const openEditDept = (dept: Department) => {
+    setEditingDept(dept);
+    setEditDeptName(dept.name);
+    setEditDeptCode(dept.code);
+    setEditDeptDesc(dept.description || '');
+    setEditDeptStatus(dept.status || 'active');
+  };
+
+  const handleUpdateDepartment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDept) return;
+    try {
+      const res = await apiRequest<{ message: string; department: Department }>(`/academic/departments/${editingDept.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: editDeptName,
+          code: editDeptCode,
+          description: editDeptDesc,
+          status: editDeptStatus,
+        }),
+      });
+      setDepartments((prev) => prev.map((d) => (d.id === res.department.id ? res.department : d)));
+      setEditingDept(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error updating department');
+    }
+  };
+
+  const openEditSemester = (sem: Semester, sessionId: string) => {
+    setEditingSemester(sem);
+    setEditSemSessionId(sessionId);
+    setEditSemName(sem.name);
+    setEditSemNumber(sem.semester_number);
+    setEditSemStart(sem.start_date || '');
+    setEditSemEnd(sem.end_date || '');
+    setEditSemActive(sem.is_active);
+  };
+
+  const handleUpdateSemester = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSemester) return;
+    try {
+      await apiRequest(`/academic/semesters/${editingSemester.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          academic_session_id: editSemSessionId,
+          name: editSemName,
+          semester_number: editSemNumber,
+          start_date: editSemStart || null,
+          end_date: editSemEnd || null,
+          is_active: editSemActive,
+        }),
+      });
+      setEditingSemester(null);
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error updating semester');
+    }
+  };
+
+  const openCreateSemester = (sessionId: string) => {
+    const session = sessions.find((s) => s.id === sessionId);
+    const nextNumber = session?.semesters ? session.semesters.length + 1 : 1;
+    setNewSemSessionId(sessionId);
+    setNewSemName(`Semester ${nextNumber}`);
+    setNewSemNumber(nextNumber);
+    setNewSemStart(session?.start_date || '');
+    setNewSemEnd(session?.end_date || '');
+    setNewSemActive(false);
+    setIsNewSemModalOpen(true);
+  };
+
+  const handleCreateSemester = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await apiRequest('/academic/semesters', {
+        method: 'POST',
+        body: JSON.stringify({
+          academic_session_id: newSemSessionId,
+          name: newSemName,
+          semester_number: newSemNumber,
+          start_date: newSemStart || null,
+          end_date: newSemEnd || null,
+          is_active: newSemActive,
+        }),
+      });
+      setIsNewSemModalOpen(false);
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error creating semester');
     }
   };
 
@@ -195,6 +313,17 @@ export const AcademicView: React.FC = () => {
                 <div className="card-footer">
                   <span><strong>{dept.programmes_count ?? 0}</strong> Programmes</span>
                   <span><strong>{dept.teachers_count ?? 0}</strong> Faculty</span>
+                  {canManage && (
+                    <button
+                      type="button"
+                      className="btn btn-outline btn-sm"
+                      onClick={() => openEditDept(dept)}
+                      style={{ marginLeft: 'auto' }}
+                      title="Edit Department"
+                    >
+                      <Edit2 size={13} /> Edit
+                    </button>
+                  )}
                 </div>
               </article>
             ))}
@@ -245,19 +374,41 @@ export const AcademicView: React.FC = () => {
                     <h3>{sess.name}</h3>
                     <small>{sess.start_date} to {sess.end_date}</small>
                   </div>
-                  {sess.is_current && (
-                    <span className="badge badge-current">
-                      <CheckCircle2 size={13} /> Current Active Year
-                    </span>
-                  )}
+                  <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                    {sess.is_current && (
+                      <span className="badge badge-current">
+                        <CheckCircle2 size={13} /> Current Active Year
+                      </span>
+                    )}
+                    {canManage && (
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => openCreateSemester(sess.id)}
+                      >
+                        <Plus size={13} /> Add Semester
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="semesters-row">
                   {sess.semesters && sess.semesters.length > 0 ? (
                     sess.semesters.map((sem) => (
                       <div key={sem.id} className={`semester-chip ${sem.is_active ? 'active-sem' : ''}`}>
-                        <span>{sem.name}</span>
+                        <span>{sem.name} (#{sem.semester_number})</span>
                         {sem.is_active && <small>Active Term</small>}
+                        {canManage && (
+                          <button
+                            type="button"
+                            className="btn-link"
+                            style={{ marginLeft: '6px', padding: '2px', color: 'inherit' }}
+                            title="Edit Semester"
+                            onClick={() => openEditSemester(sem, sess.id)}
+                          >
+                            <Edit2 size={12} />
+                          </button>
+                        )}
                       </div>
                     ))
                   ) : (
@@ -400,6 +551,181 @@ export const AcademicView: React.FC = () => {
                 </div>
               </div>
               <button type="submit" className="btn btn-primary btn-block">Save Programme</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Department */}
+      {editingDept && (
+        <div className="modal-backdrop" onClick={() => setEditingDept(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Department: {editingDept.code}</h3>
+              <button className="btn-close" onClick={() => setEditingDept(null)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleUpdateDepartment} className="modal-form">
+              <div className="form-group">
+                <label>Department Code (Unique)</label>
+                <input
+                  required
+                  placeholder="e.g. CSE, ECE, MECH"
+                  value={editDeptCode}
+                  onChange={(e) => setEditDeptCode(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div className="form-group">
+                <label>Department Full Name</label>
+                <input
+                  required
+                  placeholder="e.g. Department of Computer Science & Engineering"
+                  value={editDeptName}
+                  onChange={(e) => setEditDeptName(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Status</label>
+                <select value={editDeptStatus} onChange={(e) => setEditDeptStatus(e.target.value)}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Description (Optional)</label>
+                <textarea
+                  placeholder="Overview of the department and faculty..."
+                  rows={3}
+                  value={editDeptDesc}
+                  onChange={(e) => setEditDeptDesc(e.target.value)}
+                />
+              </div>
+              <button type="submit" className="btn btn-primary btn-block">Save Changes</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Semester */}
+      {editingSemester && (
+        <div className="modal-backdrop" onClick={() => setEditingSemester(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Semester: {editingSemester.name}</h3>
+              <button className="btn-close" onClick={() => setEditingSemester(null)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleUpdateSemester} className="modal-form">
+              <div className="form-group">
+                <label>Semester Term Name</label>
+                <input
+                  required
+                  placeholder="e.g. Fall Semester, Spring Semester, Semester 1"
+                  value={editSemName}
+                  onChange={(e) => setEditSemName(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Semester Sequence Number (1-16)</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={16}
+                  value={editSemNumber}
+                  onChange={(e) => setEditSemNumber(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Start Date</label>
+                  <input
+                    type="date"
+                    value={editSemStart}
+                    onChange={(e) => setEditSemStart(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>End Date</label>
+                  <input
+                    type="date"
+                    value={editSemEnd}
+                    onChange={(e) => setEditSemEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={editSemActive}
+                    onChange={(e) => setEditSemActive(e.target.checked)}
+                  />
+                  <span>Mark as Active Term</span>
+                </label>
+              </div>
+              <button type="submit" className="btn btn-primary btn-block">Save Semester</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: New Semester */}
+      {isNewSemModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsNewSemModalOpen(false)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Add New Semester Term</h3>
+              <button className="btn-close" onClick={() => setIsNewSemModalOpen(false)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleCreateSemester} className="modal-form">
+              <div className="form-group">
+                <label>Semester Term Name</label>
+                <input
+                  required
+                  placeholder="e.g. Monsoon Semester, Semester 2"
+                  value={newSemName}
+                  onChange={(e) => setNewSemName(e.target.value)}
+                />
+              </div>
+              <div className="form-group">
+                <label>Semester Sequence Number (1-16)</label>
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={16}
+                  value={newSemNumber}
+                  onChange={(e) => setNewSemNumber(parseInt(e.target.value) || 1)}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Start Date</label>
+                  <input
+                    type="date"
+                    value={newSemStart}
+                    onChange={(e) => setNewSemStart(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>End Date</label>
+                  <input
+                    type="date"
+                    value={newSemEnd}
+                    onChange={(e) => setNewSemEnd(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={newSemActive}
+                    onChange={(e) => setNewSemActive(e.target.checked)}
+                  />
+                  <span>Mark as Active Term</span>
+                </label>
+              </div>
+              <button type="submit" className="btn btn-primary btn-block">Create Semester</button>
             </form>
           </div>
         </div>

@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             ExamSeeder::class,
             AttendanceSeeder::class,
             CertificateSeeder::class,
+            LiveClassroomSeeder::class,
         ]);
     }
 }

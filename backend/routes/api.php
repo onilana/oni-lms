@@ -5,12 +5,19 @@ use App\Http\Controllers\Api\V1\Academic\BatchController;
 use App\Http\Controllers\Api\V1\Academic\DepartmentController;
 use App\Http\Controllers\Api\V1\Academic\ProgrammeController;
 use App\Http\Controllers\Api\V1\Academic\SemesterController;
+use App\Http\Controllers\Api\V1\AiAssistantController;
+use App\Http\Controllers\Api\V1\Analytics\AnalyticsController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentAttachmentController;
+use App\Http\Controllers\Api\V1\AuditLogController;
+use App\Http\Controllers\Api\V1\BackupController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentController;
 use App\Http\Controllers\Api\V1\Assignment\AssignmentSubmissionController;
 use App\Http\Controllers\Api\V1\Attendance\AttendanceController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\Certificate\CertificateController;
+use App\Http\Controllers\Api\V1\Communication\AnnouncementController;
+use App\Http\Controllers\Api\V1\Communication\LiveSessionController;
+use App\Http\Controllers\Api\V1\Communication\NotificationController;
 use App\Http\Controllers\Api\V1\Course\CourseController;
 use App\Http\Controllers\Api\V1\Course\CourseEnrolmentController;
 use App\Http\Controllers\Api\V1\DashboardController;
@@ -22,6 +29,8 @@ use App\Http\Controllers\Api\V1\Lesson\LessonController;
 use App\Http\Controllers\Api\V1\Lesson\LessonProgressController;
 use App\Http\Controllers\Api\V1\QuestionController;
 use App\Http\Controllers\Api\V1\RoleController;
+use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\Api\V1\WordPressIntegrationController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->group(function (): void {
@@ -36,6 +45,12 @@ Route::prefix('v1')->group(function (): void {
     // Public Certificate Verification (Epic 9)
     Route::get('/certificates/verify/{code}', [CertificateController::class, 'verify']);
 
+    // Public WordPress Integration (Milestone 13 - oni_lana)
+    Route::prefix('integrations/wordpress')->group(function (): void {
+        Route::get('/catalogue', [WordPressIntegrationController::class, 'catalogue']);
+        Route::post('/sso-handshake', [WordPressIntegrationController::class, 'ssoHandshake']);
+    });
+
     // Authenticated endpoints
     Route::middleware('auth:sanctum')->group(function (): void {
         // User profile & session
@@ -46,12 +61,18 @@ Route::prefix('v1')->group(function (): void {
             Route::put('/profile', [AuthController::class, 'updateProfile']);
         });
 
-        // Student Dashboard
+        // Dashboards & Portals (Student, Teacher, Department, Admin)
         Route::get('/dashboard/student', [DashboardController::class, 'student']);
+        Route::get('/dashboard/teacher', [DashboardController::class, 'teacher']);
+        Route::get('/dashboard/department', [DashboardController::class, 'department']);
+        Route::get('/dashboard/admin', [DashboardController::class, 'admin']);
 
-        // Administration & RBAC lookup
-        Route::middleware('role:super_admin,college_admin')->group(function (): void {
+        // Administration, Users & RBAC
+        Route::middleware('role:super_admin,college_admin,dept_admin')->group(function (): void {
             Route::get('/roles', [RoleController::class, 'index']);
+            Route::apiResource('users', UserController::class);
+            Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+            Route::post('/students/import', [UserController::class, 'importStudents']);
         });
 
         // Academic Management (Epic 3)
@@ -208,11 +229,79 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/my-attendance', [AttendanceController::class, 'myAttendance']);
 
         // Certificate Management (Epic 9)
+        Route::get('/certificates', [CertificateController::class, 'index']);
         Route::get('/my-certificates', [CertificateController::class, 'myCertificates']);
         Route::get('/courses/{course}/certificate/eligibility', [CertificateController::class, 'eligibility']);
         Route::post('/courses/{course}/certificate/claim', [CertificateController::class, 'claim']);
         Route::post('/certificates/issue', [CertificateController::class, 'issue']);
         Route::get('/certificates/{certificate}', [CertificateController::class, 'show']);
+        Route::put('/certificates/{certificate}', [CertificateController::class, 'update']);
         Route::post('/certificates/{certificate}/revoke', [CertificateController::class, 'revoke']);
+
+        // Communication & Live Classes (Milestone 10)
+        Route::prefix('courses/{course}/live-sessions')->group(function (): void {
+            Route::get('/', [LiveSessionController::class, 'indexForCourse']);
+            Route::post('/', [LiveSessionController::class, 'store']);
+        });
+
+        Route::prefix('live-sessions')->group(function (): void {
+            Route::get('/upcoming', [LiveSessionController::class, 'upcoming']);
+            Route::get('/{session}', [LiveSessionController::class, 'show']);
+            Route::post('/{session}/join', [LiveSessionController::class, 'join']);
+            Route::post('/{session}/status', [LiveSessionController::class, 'updateStatus']);
+            Route::delete('/{session}', [LiveSessionController::class, 'destroy']);
+        });
+
+        Route::prefix('announcements')->group(function (): void {
+            Route::get('/', [AnnouncementController::class, 'index']);
+            Route::post('/', [AnnouncementController::class, 'store']);
+            Route::get('/{announcement}', [AnnouncementController::class, 'show']);
+            Route::delete('/{announcement}', [AnnouncementController::class, 'destroy']);
+        });
+
+        Route::prefix('notifications')->group(function (): void {
+            Route::get('/', [NotificationController::class, 'index']);
+            Route::post('/{notification}/read', [NotificationController::class, 'markAsRead']);
+            Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+        });
+
+        // Analytics & Reporting (Milestone 11)
+        Route::prefix('analytics')->group(function (): void {
+            Route::get('/student', [AnalyticsController::class, 'student']);
+            Route::get('/teacher', [AnalyticsController::class, 'teacher']);
+            Route::get('/courses/{course}', [AnalyticsController::class, 'course']);
+            Route::get('/admin', [AnalyticsController::class, 'admin']);
+            Route::get('/export/csv', [AnalyticsController::class, 'exportCsv']);
+        });
+
+        // AI Learning Assistant (Milestone 12)
+        Route::prefix('ai')->group(function (): void {
+            Route::get('/conversations', [AiAssistantController::class, 'indexConversations']);
+            Route::post('/conversations', [AiAssistantController::class, 'storeConversation']);
+            Route::get('/conversations/{conversation}', [AiAssistantController::class, 'showConversation']);
+            Route::post('/conversations/{conversation}/messages', [AiAssistantController::class, 'sendMessage']);
+            Route::post('/documents/index', [AiAssistantController::class, 'indexDocument']);
+            Route::get('/usage', [AiAssistantController::class, 'usageStats']);
+        });
+
+        // WordPress Integration (Milestone 13 - oni_lana)
+        Route::prefix('integrations/wordpress')->group(function (): void {
+            Route::get('/status', [WordPressIntegrationController::class, 'status']);
+            Route::post('/sync-notices', [WordPressIntegrationController::class, 'syncNotices']);
+            Route::get('/snippets', [WordPressIntegrationController::class, 'snippets']);
+        });
+
+        // Security & Audit Logs (Part 12)
+        Route::prefix('audit-logs')->group(function (): void {
+            Route::get('/', [AuditLogController::class, 'index']);
+            Route::get('/stats', [AuditLogController::class, 'stats']);
+        });
+
+        // Backup & Disaster Recovery (Part 13)
+        Route::prefix('backups')->group(function (): void {
+            Route::get('/', [BackupController::class, 'index']);
+            Route::post('/', [BackupController::class, 'create']);
+            Route::get('/{filename}/download', [BackupController::class, 'download']);
+        });
     });
 });

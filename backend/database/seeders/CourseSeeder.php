@@ -60,10 +60,24 @@ class CourseSeeder extends Seeder
         );
 
         // Assign instructor
-        if ($admin) {
+        $teacher = User::where('email', 'teacher@onilms.edu')->first();
+        $hod = User::where('email', 'hod@onilms.edu')->first();
+
+        if ($teacher) {
+            \App\Models\TeacherProfile::firstOrCreate(
+                ['user_id' => $teacher->id],
+                [
+                    'department_id' => $cse->id,
+                    'employee_id_number' => 'FAC-2026-0012',
+                    'designation' => 'Associate Professor',
+                    'qualification' => 'Ph.D. in Computer Science',
+                    'status' => 'active',
+                ]
+            );
+
             CourseInstructor::firstOrCreate([
                 'course_id' => $dsa->id,
-                'user_id' => $admin->id,
+                'user_id' => $teacher->id,
             ], [
                 'role' => 'lead',
                 'academic_session_id' => $session->id,
@@ -71,9 +85,40 @@ class CourseSeeder extends Seeder
 
             CourseInstructor::firstOrCreate([
                 'course_id' => $dbms->id,
-                'user_id' => $admin->id,
+                'user_id' => $teacher->id,
             ], [
                 'role' => 'lead',
+                'academic_session_id' => $session->id,
+            ]);
+        }
+
+        if ($hod) {
+            \App\Models\TeacherProfile::firstOrCreate(
+                ['user_id' => $hod->id],
+                [
+                    'department_id' => $cse->id,
+                    'employee_id_number' => 'FAC-2026-0001',
+                    'designation' => 'Professor & Head of Department',
+                    'qualification' => 'Ph.D., Senior Member IEEE',
+                    'status' => 'active',
+                ]
+            );
+        }
+
+        if ($admin) {
+            CourseInstructor::firstOrCreate([
+                'course_id' => $dsa->id,
+                'user_id' => $admin->id,
+            ], [
+                'role' => 'co_instructor',
+                'academic_session_id' => $session->id,
+            ]);
+
+            CourseInstructor::firstOrCreate([
+                'course_id' => $dbms->id,
+                'user_id' => $admin->id,
+            ], [
+                'role' => 'co_instructor',
                 'academic_session_id' => $session->id,
             ]);
         }

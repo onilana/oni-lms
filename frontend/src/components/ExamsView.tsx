@@ -4,6 +4,7 @@ import {
   Award,
   CheckCircle,
   Clock,
+  Edit2,
   FileQuestion,
   HelpCircle,
   Plus,
@@ -47,6 +48,17 @@ export const ExamsView: React.FC = () => {
   const [createPassPct, setCreatePassPct] = useState(50);
   const [createShuffle, setCreateShuffle] = useState(true);
   const [createPublish, setCreatePublish] = useState(true);
+
+  // Teacher edit exam modal
+  const [editingExam, setEditingExam] = useState<Exam | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editDesc, setEditDesc] = useState('');
+  const [editDuration, setEditDuration] = useState(60);
+  const [editMarks, setEditMarks] = useState(100);
+  const [editPassPct, setEditPassPct] = useState(50);
+  const [editShuffle, setEditShuffle] = useState(true);
+  const [editMaxAttempts, setEditMaxAttempts] = useState(1);
+  const [editPublish, setEditPublish] = useState(true);
 
   // Teacher add question modal
   const [isAddQuestionOpen, setIsAddQuestionOpen] = useState(false);
@@ -169,6 +181,46 @@ export const ExamsView: React.FC = () => {
       }
     } catch (err: any) {
       alert(err.message || 'Failed to create exam');
+    }
+  };
+
+  const handleOpenEdit = (exam: Exam) => {
+    setEditingExam(exam);
+    setEditTitle(exam.title);
+    setEditDesc(exam.description || '');
+    setEditDuration(exam.duration_minutes);
+    setEditMarks(exam.total_marks);
+    setEditPassPct(exam.passing_percentage);
+    setEditShuffle(exam.shuffle_questions);
+    setEditMaxAttempts(exam.max_attempts);
+    setEditPublish(exam.is_published);
+  };
+
+  const handleUpdateExam = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingExam) return;
+
+    try {
+      await apiRequest(`/exams/${editingExam.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: editTitle,
+          description: editDesc,
+          duration_minutes: Number(editDuration),
+          total_marks: Number(editMarks),
+          passing_percentage: Number(editPassPct),
+          shuffle_questions: editShuffle,
+          max_attempts: Number(editMaxAttempts),
+          is_published: editPublish,
+        }),
+      });
+
+      setEditingExam(null);
+      if (selectedCourseId) {
+        loadExams(selectedCourseId);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Error updating exam');
     }
   };
 
@@ -385,16 +437,26 @@ export const ExamsView: React.FC = () => {
                   )}
 
                   {isStaff && (
-                    <button
-                      className="btn btn-outline"
-                      title="Add Question to Exam"
-                      onClick={() => {
-                        setTargetExam(exam);
-                        setIsAddQuestionOpen(true);
-                      }}
-                    >
-                      <Plus size={15} /> Add Question
-                    </button>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        style={{ flex: 1 }}
+                        title="Add Question to Exam"
+                        onClick={() => {
+                          setTargetExam(exam);
+                          setIsAddQuestionOpen(true);
+                        }}
+                      >
+                        <Plus size={14} /> Add Question
+                      </button>
+                      <button
+                        className="btn btn-secondary btn-sm"
+                        title="Edit Exam Configuration"
+                        onClick={() => handleOpenEdit(exam)}
+                      >
+                        <Edit2 size={14} /> Edit
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -546,6 +608,133 @@ export const ExamsView: React.FC = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Create Exam
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Exam Modal */}
+      {editingExam && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '520px' }}>
+            <div className="modal-header">
+              <h3>Edit Examination: {editingExam.title}</h3>
+              <button className="btn-icon" onClick={() => setEditingExam(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateExam}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Exam Title</label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    placeholder="e.g. Midterm Assessment: Binary Trees & Heaps"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label>Description / Overview</label>
+                  <textarea
+                    className="form-control"
+                    rows={2}
+                    value={editDesc}
+                    onChange={(e) => setEditDesc(e.target.value)}
+                  />
+                </div>
+
+                <div className="field-row">
+                  <div className="form-group">
+                    <label>Duration (Minutes)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editDuration}
+                      min={1}
+                      max={600}
+                      onChange={(e) => setEditDuration(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Total Marks</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editMarks}
+                      min={1}
+                      onChange={(e) => setEditMarks(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="field-row">
+                  <div className="form-group">
+                    <label>Passing Percentage (%)</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editPassPct}
+                      min={1}
+                      max={100}
+                      onChange={(e) => setEditPassPct(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Max Attempts</label>
+                    <input
+                      type="number"
+                      className="form-control"
+                      value={editMaxAttempts}
+                      min={1}
+                      max={10}
+                      onChange={(e) => setEditMaxAttempts(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editShuffle}
+                      onChange={(e) => setEditShuffle(e.target.checked)}
+                    />
+                    <span>Shuffle Questions</span>
+                  </label>
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editPublish}
+                      onChange={(e) => setEditPublish(e.target.checked)}
+                    />
+                    <span>Publish (Visible &amp; Accessible to Enrolled Students)</span>
+                  </label>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingExam(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
                 </button>
               </div>
             </form>

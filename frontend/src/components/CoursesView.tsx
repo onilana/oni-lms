@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   BookOpen,
   CheckCircle,
+  Edit2,
   FileText,
   GraduationCap,
   Layers,
@@ -52,6 +53,19 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
   const [newStatus, setNewStatus] = useState<'draft' | 'published'>('published');
   const [newDesc, setNewDesc] = useState('');
   const [newSyllabus, setNewSyllabus] = useState('');
+
+  // Edit Course modal
+  const [editingCourse, setEditingCourse] = useState<Course | null>(null);
+  const [editDeptId, setEditDeptId] = useState('');
+  const [editProgId, setEditProgId] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editTitle, setEditTitle] = useState('');
+  const [editCredits, setEditCredits] = useState(3);
+  const [editLevel, setEditLevel] = useState('Undergraduate');
+  const [editSemester, setEditSemester] = useState(1);
+  const [editStatus, setEditStatus] = useState<'draft' | 'published' | 'archived'>('published');
+  const [editDesc, setEditDesc] = useState('');
+  const [editSyllabus, setEditSyllabus] = useState('');
 
   const fetchCourses = async () => {
     setLoading(true);
@@ -148,6 +162,51 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
       await fetchCourses();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating course');
+    }
+  };
+
+  const handleOpenEdit = (c: Course) => {
+    setEditingCourse(c);
+    setEditDeptId(c.department_id);
+    setEditProgId(c.programme_id || '');
+    setEditCode(c.code);
+    setEditTitle(c.title);
+    setEditCredits(c.credits);
+    setEditLevel(c.level || 'Undergraduate');
+    setEditSemester(c.semester_number || 1);
+    setEditStatus(c.status);
+    setEditDesc(c.description || '');
+    setEditSyllabus(c.syllabus || '');
+  };
+
+  const handleUpdateCourse = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCourse) return;
+    try {
+      const res = await apiRequest<{ message: string; course: Course }>(`/courses/${editingCourse.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          department_id: editDeptId,
+          programme_id: editProgId || undefined,
+          code: editCode,
+          title: editTitle,
+          credits: editCredits,
+          level: editLevel,
+          semester_number: editSemester,
+          status: editStatus,
+          description: editDesc,
+          syllabus: editSyllabus,
+        }),
+      });
+
+      const updated = res.course;
+      setCourses((prev) => prev.map((c) => (c.id === updated.id ? updated : c)));
+      if (selectedCourse?.id === updated.id) {
+        setSelectedCourse(updated);
+      }
+      setEditingCourse(null);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error updating course');
     }
   };
 
@@ -258,6 +317,17 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
                   <FileText size={14} /> Syllabus & Details
                 </button>
 
+                {canCreateCourse && (
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-sm"
+                    title="Edit Course"
+                    onClick={() => handleOpenEdit(c)}
+                  >
+                    <Edit2 size={13} /> Edit
+                  </button>
+                )}
+
                 {c.is_enrolled || canCreateCourse ? (
                   <button
                     className="btn btn-secondary btn-sm"
@@ -340,6 +410,17 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
 
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setSelectedCourse(null)}>Close</button>
+              {canCreateCourse && (
+                <button
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    handleOpenEdit(selectedCourse);
+                    setSelectedCourse(null);
+                  }}
+                >
+                  <Edit2 size={14} /> Edit Course
+                </button>
+              )}
               {!selectedCourse.is_enrolled && (
                 <button
                   className="btn btn-primary"
@@ -470,6 +551,128 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
 
               <button type="submit" className="btn btn-primary btn-block">
                 Save & Publish Course
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Course Modal */}
+      {editingCourse && (
+        <div className="modal-backdrop" onClick={() => setEditingCourse(null)}>
+          <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Edit Course: {editingCourse.code}</h3>
+                <p>Modify course information, credits, syllabus, and publication status</p>
+              </div>
+              <button className="btn-close" onClick={() => setEditingCourse(null)}><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleUpdateCourse} className="modal-form">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="form-group">
+                  <label>Department</label>
+                  <select value={editDeptId} onChange={(e) => setEditDeptId(e.target.value)}>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Programme (Optional)</label>
+                  <select value={editProgId} onChange={(e) => setEditProgId(e.target.value)}>
+                    <option value="">General Department Course</option>
+                    {programmes.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '14px' }}>
+                <div className="form-group">
+                  <label>Course Code</label>
+                  <input
+                    required
+                    placeholder="e.g. CS101, MATH201"
+                    value={editCode}
+                    onChange={(e) => setEditCode(e.target.value.toUpperCase())}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Course Title</label>
+                  <input
+                    required
+                    placeholder="e.g. Data Structures and Algorithms"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Credits</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={editCredits}
+                    onChange={(e) => setEditCredits(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Level</label>
+                  <select value={editLevel} onChange={(e) => setEditLevel(e.target.value)}>
+                    <option value="Undergraduate">Undergraduate</option>
+                    <option value="Postgraduate">Postgraduate</option>
+                    <option value="Diploma">Diploma</option>
+                    <option value="Certificate">Certificate</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Semester</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={16}
+                    value={editSemester}
+                    onChange={(e) => setEditSemester(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Status</label>
+                  <select value={editStatus} onChange={(e) => setEditStatus(e.target.value as 'draft' | 'published' | 'archived')}>
+                    <option value="published">Published</option>
+                    <option value="draft">Draft</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label>Description</label>
+                <textarea
+                  rows={2}
+                  placeholder="Summary of course topics and prerequisites..."
+                  value={editDesc}
+                  onChange={(e) => setEditDesc(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Syllabus Units & Structure</label>
+                <textarea
+                  rows={4}
+                  placeholder="Unit 1: Fundamentals...&#10;Unit 2: Core Concepts...&#10;Unit 3: Applications..."
+                  value={editSyllabus}
+                  onChange={(e) => setEditSyllabus(e.target.value)}
+                />
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block">
+                Save Changes
               </button>
             </form>
           </div>

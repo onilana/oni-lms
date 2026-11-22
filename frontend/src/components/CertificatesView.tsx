@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   Search,
   Download,
+  Edit2,
   Printer,
   ExternalLink,
   ShieldCheck,
@@ -70,6 +71,19 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
   const [revokeReason, setRevokeReason] = useState<string>('');
   const [revokingId, setRevokingId] = useState<string | null>(null);
 
+  // All certificates registry & edit state
+  const [allCertificates, setAllCertificates] = useState<Certificate[]>([]);
+  const [loadingAllCerts, setLoadingAllCerts] = useState<boolean>(false);
+  const [certSearchTerm, setCertSearchTerm] = useState<string>('');
+
+  const [editingCert, setEditingCert] = useState<Certificate | null>(null);
+  const [editTitle, setEditTitle] = useState('');
+  const [editGrade, setEditGrade] = useState('');
+  const [editFinalScore, setEditFinalScore] = useState<number | ''>('');
+  const [editAttendancePct, setEditAttendancePct] = useState<number | ''>('');
+  const [editIsRevoked, setEditIsRevoked] = useState(false);
+  const [editRevocationReason, setEditRevocationReason] = useState('');
+
   const isStaff = currentUser?.roles?.some(r =>
     ['teacher', 'dept_admin', 'college_admin', 'super_admin'].includes(r.name)
   );
@@ -77,8 +91,60 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
   useEffect(() => {
     if (activeTab === 'my_certificates') {
       loadMyCertificates();
+    } else if (activeTab === 'manage' && isStaff) {
+      loadAllCertificates();
     }
-  }, [activeTab]);
+  }, [activeTab, isStaff]);
+
+  const loadAllCertificates = async (search = certSearchTerm) => {
+    setLoadingAllCerts(true);
+    try {
+      const q = search ? `?search=${encodeURIComponent(search)}` : '';
+      const res = await apiRequest<{ data: Certificate[] }>(`/certificates${q}`);
+      setAllCertificates(res.data);
+    } catch (err: any) {
+      console.error('Failed to load certificates register', err);
+    } finally {
+      setLoadingAllCerts(false);
+    }
+  };
+
+  const openEditCert = (cert: Certificate) => {
+    setEditingCert(cert);
+    setEditTitle(cert.title);
+    setEditGrade(cert.grade || '');
+    setEditFinalScore(cert.final_score !== null && cert.final_score !== undefined ? cert.final_score : '');
+    setEditAttendancePct(cert.attendance_percentage !== null && cert.attendance_percentage !== undefined ? cert.attendance_percentage : '');
+    setEditIsRevoked(cert.is_revoked);
+    setEditRevocationReason(cert.revocation_reason || '');
+  };
+
+  const handleUpdateCertificate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCert) return;
+    try {
+      await apiRequest(`/certificates/${editingCert.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: editTitle,
+          grade: editGrade || null,
+          final_score: editFinalScore !== '' ? Number(editFinalScore) : null,
+          attendance_percentage: editAttendancePct !== '' ? Number(editAttendancePct) : null,
+          is_revoked: editIsRevoked,
+          revocation_reason: editIsRevoked ? editRevocationReason : null,
+        }),
+      });
+
+      setSuccessMsg('Certificate record updated successfully.');
+      setEditingCert(null);
+      await loadAllCertificates(certSearchTerm);
+      if (activeTab === 'my_certificates') {
+        await loadMyCertificates();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to update certificate');
+    }
+  };
 
   useEffect(() => {
     if (activeTab === 'eligibility' && selectedCourseId) {
@@ -706,6 +772,204 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
               <span>Issue Official Certificate</span>
             </button>
           </form>
+
+          {/* Issued Certificates Register */}
+          <div style={{ marginTop: '2.5rem', borderTop: '1px solid #e2e8f0', paddingTop: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h4 style={{ margin: 0 }}>All Issued Certificates Register</h4>
+                <small className="text-muted">Search, audit, adjust grades, or revoke/reinstate academic credentials</small>
+              </div>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input
+                  type="text"
+                  placeholder="Filter by code, student, or title..."
+                  value={certSearchTerm}
+                  onChange={(e) => {
+                    setCertSearchTerm(e.target.value);
+                    loadAllCertificates(e.target.value);
+                  }}
+                  className="form-control"
+                  style={{ width: '260px' }}
+                />
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => loadAllCertificates(certSearchTerm)}
+                >
+                  <RefreshCw size={14} className={loadingAllCerts ? 'animate-spin' : ''} />
+                </button>
+              </div>
+            </div>
+
+            {loadingAllCerts ? (
+              <p>Loading certificate register...</p>
+            ) : allCertificates.length === 0 ? (
+              <p className="text-muted">No certificates found in the database.</p>
+            ) : (
+              <div className="table-responsive">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Code</th>
+                      <th>Student</th>
+                      <th>Course</th>
+                      <th>Grade / Score</th>
+                      <th>Status</th>
+                      <th>Awarded</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {allCertificates.map((c) => (
+                      <tr key={c.id}>
+                        <td><code>{c.certificate_code}</code></td>
+                        <td>
+                          <strong>{c.student?.name || 'Student'}</strong>
+                          <small style={{ display: 'block', color: '#64748b' }}>{c.student?.email}</small>
+                        </td>
+                        <td>{c.course?.code}: {c.course?.title}</td>
+                        <td>
+                          <span className="badge badge-accent">{c.grade || 'Pass'}</span>
+                          {c.final_score !== null && <small style={{ marginLeft: '6px' }}>({c.final_score}%)</small>}
+                        </td>
+                        <td>
+                          <span className={`status ${c.is_revoked ? 'danger' : 'ok'}`}>
+                            {c.is_revoked ? 'Revoked' : 'Active'}
+                          </span>
+                        </td>
+                        <td><small>{c.issued_at ? new Date(c.issued_at).toLocaleDateString() : '—'}</small></td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => setSelectedCertificate(c)}
+                              title="View Ornate Diploma"
+                            >
+                              <Award size={13} /> View
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline btn-sm"
+                              onClick={() => openEditCert(c)}
+                              title="Edit Certificate Details"
+                            >
+                              <Edit2 size={13} /> Edit
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* EDIT CERTIFICATE MODAL */}
+      {editingCert && (
+        <div className="modal-overlay" onClick={() => setEditingCert(null)}>
+          <div className="modal-container" style={{ maxWidth: '540px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Certificate: {editingCert.certificate_code}</h3>
+              <button className="btn-icon" onClick={() => setEditingCert(null)}><XCircle size={18} /></button>
+            </div>
+            <form onSubmit={handleUpdateCertificate}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Certificate Title</label>
+                  <input
+                    type="text"
+                    required
+                    className="form-control"
+                    value={editTitle}
+                    onChange={(e) => setEditTitle(e.target.value)}
+                  />
+                </div>
+
+                <div className="field-row">
+                  <div className="form-group">
+                    <label>Honor / Grade</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. Distinction, Honors, A+, Pass"
+                      value={editGrade}
+                      onChange={(e) => setEditGrade(e.target.value)}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Final Score (0 - 100)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step="0.1"
+                      className="form-control"
+                      value={editFinalScore}
+                      onChange={(e) => setEditFinalScore(e.target.value === '' ? '' : Number(e.target.value))}
+                    />
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label>Attendance Percentage (0 - 100)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={100}
+                    step="0.1"
+                    className="form-control"
+                    value={editAttendancePct}
+                    onChange={(e) => setEditAttendancePct(e.target.value === '' ? '' : Number(e.target.value))}
+                  />
+                </div>
+
+                <div className="form-group" style={{ margin: '1rem 0' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={editIsRevoked}
+                      onChange={(e) => setEditIsRevoked(e.target.checked)}
+                    />
+                    <span style={{ color: editIsRevoked ? '#b91c1c' : 'inherit', fontWeight: editIsRevoked ? 600 : 400 }}>
+                      Mark Certificate as Revoked (Invalidate Credential)
+                    </span>
+                  </label>
+                </div>
+
+                {editIsRevoked && (
+                  <div className="form-group">
+                    <label>Revocation Reason (Required when revoked)</label>
+                    <textarea
+                      required
+                      rows={2}
+                      className="form-control"
+                      placeholder="e.g. Academic dishonesty, plagiarism, or administrative cancellation"
+                      value={editRevocationReason}
+                      onChange={(e) => setEditRevocationReason(e.target.value)}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setEditingCert(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

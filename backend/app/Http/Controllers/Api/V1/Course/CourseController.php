@@ -47,8 +47,11 @@ class CourseController
 
         $courses = $query->orderBy('title')->get();
 
+        $collection = CourseResource::collection($courses);
+
         return response()->json([
-            'courses' => CourseResource::collection($courses),
+            'courses' => $collection,
+            'data' => $collection,
         ]);
     }
 

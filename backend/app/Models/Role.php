@@ -14,8 +14,10 @@ class Role extends Model
     public const SUPER_ADMIN = 'super_admin';
     public const COLLEGE_ADMIN = 'college_admin';
     public const DEPT_ADMIN = 'dept_admin';
+    public const HOD = 'hod';
     public const TEACHER = 'teacher';
     public const STUDENT = 'student';
+    public const SUPPORT_STAFF = 'support_staff';
 
     protected $fillable = [
         'name',

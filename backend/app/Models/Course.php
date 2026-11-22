@@ -109,6 +109,16 @@ class Course extends Model
         return $this->hasMany(Certificate::class);
     }
 
+    public function liveSessions(): HasMany
+    {
+        return $this->hasMany(LiveSession::class)->orderBy('scheduled_start_at', 'asc');
+    }
+
+    public function announcements(): HasMany
+    {
+        return $this->hasMany(Announcement::class)->orderBy('is_pinned', 'desc')->orderBy('published_at', 'desc');
+    }
+
     public function calculateAttendanceFor(User $student): array
     {
         $sessionsCount = $this->attendanceSessions()->where('status', 'completed')->count();

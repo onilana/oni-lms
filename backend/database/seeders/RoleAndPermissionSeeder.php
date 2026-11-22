@@ -26,6 +26,10 @@ class RoleAndPermissionSeeder extends Seeder
                 'label' => 'Department Administrator',
                 'description' => 'Manages departmental programmes, teachers, batches, and courses',
             ],
+            Role::HOD => [
+                'label' => 'Head of Department',
+                'description' => 'Department academic oversight, curriculum approval, and teacher allocation',
+            ],
             Role::TEACHER => [
                 'label' => 'Teacher',
                 'description' => 'Course instructor: creates lessons, assignments, exams, and grades submissions',
@@ -33,6 +37,10 @@ class RoleAndPermissionSeeder extends Seeder
             Role::STUDENT => [
                 'label' => 'Student',
                 'description' => 'Enrolled learner: accesses learning materials, completes assessments, views grades',
+            ],
+            Role::SUPPORT_STAFF => [
+                'label' => 'Support Staff',
+                'description' => 'Restricted technical and operational support across campus',
             ],
         ];
 
@@ -138,6 +146,22 @@ class RoleAndPermissionSeeder extends Seeder
             collect($deptAdminPerms)->map(fn ($p) => $permissionModels[$p]->id)
         );
 
+        // HOD permissions (Department academic oversight)
+        $hodPerms = array_merge($deptAdminPerms, [
+            'courses.update', 'academic.manage',
+        ]);
+        $roles[Role::HOD]->permissions()->sync(
+            collect($hodPerms)->map(fn ($p) => $permissionModels[$p]->id)
+        );
+
+        // Support Staff permissions
+        $supportPerms = [
+            'users.view', 'academic.view', 'courses.view', 'attendance.view',
+        ];
+        $roles[Role::SUPPORT_STAFF]->permissions()->sync(
+            collect($supportPerms)->map(fn ($p) => $permissionModels[$p]->id)
+        );
+
         // College Admin permissions (all permissions)
         $roles[Role::COLLEGE_ADMIN]->permissions()->sync(
             collect($permissionModels)->pluck('id')
@@ -171,6 +195,36 @@ class RoleAndPermissionSeeder extends Seeder
 
         if (! $demoStudent->hasRole(Role::STUDENT)) {
             $demoStudent->roles()->attach($roles[Role::STUDENT]->id);
+        }
+
+        // 6. Default Demo Teacher User
+        $demoTeacher = User::firstOrCreate(
+            ['email' => 'teacher@onilms.edu'],
+            [
+                'name' => 'Dr. Priya Ramanathan',
+                'password' => Hash::make(env('INITIAL_TEACHER_PASSWORD', 'OniTeacher@2026!')),
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        if (! $demoTeacher->hasRole(Role::TEACHER)) {
+            $demoTeacher->roles()->attach($roles[Role::TEACHER]->id);
+        }
+
+        // 7. Default Demo HOD / Department Admin User
+        $demoHod = User::firstOrCreate(
+            ['email' => 'hod@onilms.edu'],
+            [
+                'name' => 'Prof. Vikram Sengupta',
+                'password' => Hash::make(env('INITIAL_HOD_PASSWORD', 'OniHod@2026!')),
+                'status' => 'active',
+                'email_verified_at' => now(),
+            ]
+        );
+
+        if (! $demoHod->hasRole(Role::HOD)) {
+            $demoHod->roles()->attach($roles[Role::HOD]->id);
         }
     }
 }
