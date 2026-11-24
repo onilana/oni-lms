@@ -15,6 +15,7 @@ import {
   UserCheck,
   UserPlus,
   Users,
+  Upload,
   X,
   XCircle
 } from 'lucide-react';
@@ -75,6 +76,15 @@ export const UserDirectoryView: React.FC = () => {
   const [editBatchId, setEditBatchId] = useState('');
   const [editStudentId, setEditStudentId] = useState('');
   const [editSemester, setEditSemester] = useState(1);
+
+  // Bulk Enroll State
+  const [isBulkOpen, setIsBulkOpen] = useState(false);
+  const [bulkRole, setBulkRole] = useState<'student' | 'teacher' | 'hod' | 'college_admin'>('student');
+  const [bulkDeptId, setBulkDeptId] = useState('');
+  const [bulkProgId, setBulkProgId] = useState('');
+  const [bulkCsvText, setBulkCsvText] = useState('');
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ imported_count: number; breakdown: Record<string, number>; errors: string[] } | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -243,6 +253,63 @@ export const UserDirectoryView: React.FC = () => {
     }
   };
 
+  const handleBulkEnroll = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkCsvText.trim()) return;
+    setBulkLoading(true);
+    setBulkResult(null);
+    try {
+      const lines = bulkCsvText.trim().split('\n').map(l => l.trim()).filter(Boolean);
+      const headers = lines[0].toLowerCase().includes('email')
+        ? lines[0].split(',').map(h => h.trim().toLowerCase())
+        : null;
+      const dataLines = headers ? lines.slice(1) : lines;
+
+      const parsedUsers = dataLines.map((line) => {
+        const parts = line.split(',').map(p => p.trim());
+        if (headers) {
+          const row: Record<string, any> = {
+            role: bulkRole,
+            department_id: bulkDeptId || null,
+            programme_id: bulkProgId || null,
+          };
+          headers.forEach((h, i) => {
+            if (parts[i]) row[h] = parts[i];
+          });
+          return row;
+        }
+        return {
+          name: parts[0] || '',
+          email: parts[1] || '',
+          role: parts[2] || bulkRole,
+          student_id_number: parts[3] || undefined,
+          employee_id_number: parts[3] || undefined,
+          department_id: bulkDeptId || null,
+          programme_id: bulkProgId || null,
+        };
+      }).filter((u) => u.name && u.email);
+
+      const res = await apiRequest<{
+        message: string;
+        imported_count: number;
+        breakdown: Record<string, number>;
+        errors: string[];
+      }>('/users/bulk-enroll', {
+        method: 'POST',
+        body: JSON.stringify({ users: parsedUsers }),
+      });
+      setBulkResult(res);
+      if (res.imported_count > 0) {
+        setSuccessMsg(res.message);
+        await fetchUsers();
+      }
+    } catch (err: any) {
+      alert(err.message || 'Bulk enrollment failed');
+    } finally {
+      setBulkLoading(false);
+    }
+  };
+
   const getInitials = (name: string) => {
     return name
       .split(' ')
@@ -280,6 +347,19 @@ export const UserDirectoryView: React.FC = () => {
             <RefreshCw size={15} className={loading ? 'spin' : ''} />
             <span>Refresh</span>
           </button>
+          {isSuperAdmin && (
+            <button
+              className="btn btn-secondary"
+              onClick={() => {
+                setIsBulkOpen(true);
+                setBulkResult(null);
+              }}
+              title="Bulk Enroll Students, Faculty, HoD, or School Admins"
+            >
+              <Upload size={16} />
+              <span>Bulk Enroll</span>
+            </button>
+          )}
           <button className="btn btn-primary" onClick={() => setIsCreateOpen(true)}>
             <UserPlus size={16} />
             <span>New User</span>
@@ -802,6 +882,149 @@ export const UserDirectoryView: React.FC = () => {
               <button type="submit" className="btn btn-primary btn-block">
                 Set New Password
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* BULK ENROLLMENT MODAL */}
+      {isBulkOpen && (
+        <div className="modal-backdrop" onClick={() => setIsBulkOpen(false)}>
+          <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div>
+                <h3>Bulk User Enrollment</h3>
+                <p>Enroll School Admins, HoDs, Professors / Teachers, and Students in bulk</p>
+              </div>
+              <button className="btn-close" onClick={() => setIsBulkOpen(false)}><X size={18} /></button>
+            </div>
+
+            <form onSubmit={handleBulkEnroll} className="modal-form">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Default Target Role</label>
+                  <select
+                    value={bulkRole}
+                    onChange={(e) => setBulkRole(e.target.value as any)}
+                  >
+                    <option value="student">Students</option>
+                    <option value="teacher">Professors / Teachers</option>
+                    <option value="hod">Head of Department (HoD)</option>
+                    <option value="college_admin">School / College Administrator</option>
+                  </select>
+                </div>
+
+                {bulkRole === 'student' ? (
+                  <div className="form-group">
+                    <label>Default Degree Programme (Optional)</label>
+                    <select value={bulkProgId} onChange={(e) => setBulkProgId(e.target.value)}>
+                      <option value="">— Select Programme (or specify per row) —</option>
+                      {programmes.map((p) => (
+                        <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label>Default Department (Optional)</label>
+                    <select value={bulkDeptId} onChange={(e) => setBulkDeptId(e.target.value)}>
+                      <option value="">— Select Department (or specify per row) —</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+
+              <div className="form-group">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                  <label style={{ margin: 0 }}>CSV / Row Data (Name, Email, [Role], [ID Number])</label>
+                  <button
+                    type="button"
+                    className="btn btn-link btn-sm"
+                    onClick={() => {
+                      if (bulkRole === 'student') {
+                        setBulkCsvText("Name, Email, Student_ID\nAarav Sharma, aarav.s@onilms.edu, STU-2026-001\nDiya Patel, diya.p@onilms.edu, STU-2026-002");
+                      } else if (bulkRole === 'hod') {
+                        setBulkCsvText("Name, Email, Employee_ID\nDr. Marcus Vance, marcus.v@onilms.edu, FAC-2026-HOD1");
+                      } else if (bulkRole === 'college_admin') {
+                        setBulkCsvText("Name, Email\nDean Robert Miller, dean.miller@onilms.edu");
+                      } else {
+                        setBulkCsvText("Name, Email, Employee_ID\nProf. Sarah Jenkins, sarah.j@onilms.edu, FAC-2026-011\nDr. Alan Turing, alan.t@onilms.edu, FAC-2026-012");
+                      }
+                    }}
+                  >
+                    Insert Example Template
+                  </button>
+                </div>
+                <textarea
+                  rows={6}
+                  required
+                  placeholder="Paste CSV rows here. Example:&#10;John Doe, john@onilms.edu, STU-001&#10;Jane Smith, jane@onilms.edu, STU-002"
+                  value={bulkCsvText}
+                  onChange={(e) => setBulkCsvText(e.target.value)}
+                  style={{ fontFamily: 'monospace', fontSize: '13px' }}
+                />
+              </div>
+
+              {/* Upload file alternative */}
+              <div className="form-group">
+                <label>Or Upload CSV File</label>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const content = evt.target?.result as string;
+                        if (content) setBulkCsvText(content);
+                      };
+                      reader.readAsText(file);
+                    }
+                  }}
+                />
+              </div>
+
+              {bulkResult && (
+                <div className="alert alert-success" style={{ marginBottom: '12px' }}>
+                  <p><strong>{bulkResult.imported_count}</strong> user(s) successfully enrolled!</p>
+                  {bulkResult.breakdown && Object.keys(bulkResult.breakdown).length > 0 && (
+                    <small style={{ display: 'block', marginTop: '4px' }}>
+                      Breakdown: {Object.entries(bulkResult.breakdown).map(([r, count]) => `${r}: ${count}`).join(', ')}
+                    </small>
+                  )}
+                  {bulkResult.errors && bulkResult.errors.length > 0 && (
+                    <div style={{ marginTop: '8px', color: '#b91c1c', fontSize: '12px' }}>
+                      <strong>Skipped / Errors:</strong>
+                      <ul style={{ margin: '4px 0 0 16px', padding: 0 }}>
+                        {bulkResult.errors.map((err, idx) => (
+                          <li key={idx}>{err}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="modal-actions" style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsBulkOpen(false)}
+                >
+                  Close
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={bulkLoading || !bulkCsvText.trim()}
+                >
+                  {bulkLoading ? 'Enrolling...' : 'Process Bulk Enrollment'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

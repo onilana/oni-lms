@@ -4,6 +4,18 @@ export interface Department {
   code: string;
   description?: string;
   status: string;
+  parent_id?: string | null;
+  parent?: {
+    id: string;
+    name: string;
+    code: string;
+  } | null;
+  sub_departments?: Array<{
+    id: string;
+    name: string;
+    code: string;
+    status: string;
+  }>;
   programmes_count?: number;
   teachers_count?: number;
   head_of_department?: {

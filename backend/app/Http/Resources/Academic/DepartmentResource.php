@@ -12,6 +12,18 @@ class DepartmentResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'parent_id' => $this->parent_id,
+            'parent' => $this->relationLoaded('parent') && $this->parent ? [
+                'id' => $this->parent->id,
+                'name' => $this->parent->name,
+                'code' => $this->parent->code,
+            ] : null,
+            'sub_departments' => $this->relationLoaded('subDepartments') && $this->subDepartments ? $this->subDepartments->map(fn ($sub) => [
+                'id' => $sub->id,
+                'name' => $sub->name,
+                'code' => $sub->code,
+                'status' => $sub->status,
+            ]) : [],
             'name' => $this->name,
             'code' => $this->code,
             'description' => $this->description,

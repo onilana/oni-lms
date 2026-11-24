@@ -54,6 +54,16 @@ export const LiveClassroomView: React.FC<LiveClassroomViewProps> = ({ currentUse
   const [scheduleLinkAttendance, setScheduleLinkAttendance] = useState<boolean>(true);
   const [isScheduling, setIsScheduling] = useState<boolean>(false);
 
+  // Edit Session Modal State
+  const [editingSession, setEditingSession] = useState<LiveSession | null>(null);
+  const [editSessionTitle, setEditSessionTitle] = useState<string>('');
+  const [editSessionDescription, setEditSessionDescription] = useState<string>('');
+  const [editSessionProvider, setEditSessionProvider] = useState<string>('jitsi');
+  const [editSessionMeetingUrl, setEditSessionMeetingUrl] = useState<string>('');
+  const [editSessionStart, setEditSessionStart] = useState<string>('');
+  const [editSessionEnd, setEditSessionEnd] = useState<string>('');
+  const [isSavingEdit, setIsSavingEdit] = useState<boolean>(false);
+
   // Announcements State
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [loadingAnnouncements, setLoadingAnnouncements] = useState<boolean>(false);
@@ -239,6 +249,53 @@ export const LiveClassroomView: React.FC<LiveClassroomViewProps> = ({ currentUse
       setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
       setUnreadCount(0);
     } catch (err) {}
+  };
+
+  const openEditSession = (session: LiveSession) => {
+    setEditingSession(session);
+    setEditSessionTitle(session.title);
+    setEditSessionDescription(session.description || '');
+    setEditSessionProvider(session.provider || 'jitsi');
+    setEditSessionMeetingUrl(session.meeting_url || '');
+    // Convert ISO to datetime-local format
+    const toLocal = (iso: string) => {
+      if (!iso) return '';
+      const d = new Date(iso);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    };
+    setEditSessionStart(toLocal(session.scheduled_start_at));
+    setEditSessionEnd(toLocal(session.scheduled_end_at));
+  };
+
+  const handleEditSessionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession || !editSessionTitle.trim() || !editSessionStart || !editSessionEnd) {
+      setError('Please fill in all required fields.');
+      return;
+    }
+    setIsSavingEdit(true);
+    setError(null);
+    try {
+      await apiRequest(`/live-sessions/${editingSession.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          title: editSessionTitle,
+          description: editSessionDescription,
+          provider: editSessionProvider,
+          meeting_url: editSessionMeetingUrl || undefined,
+          scheduled_start_at: editSessionStart,
+          scheduled_end_at: editSessionEnd,
+        }),
+      });
+      setSuccessMsg('Live session schedule updated successfully.');
+      setEditingSession(null);
+      loadUpcomingSessions();
+    } catch (err: any) {
+      setError(err.message || 'Failed to update live session.');
+    } finally {
+      setIsSavingEdit(false);
+    }
   };
 
   const liveNowSessions = upcomingSessions.filter(s => s.status === 'live');
@@ -452,6 +509,17 @@ export const LiveClassroomView: React.FC<LiveClassroomViewProps> = ({ currentUse
                             >
                               <Lock size={14} />
                               <span>Locked</span>
+                            </button>
+                          )}
+                          {isStaff && session.status === 'scheduled' && (
+                            <button
+                              className="btn btn-secondary btn-sm"
+                              style={{ marginLeft: '6px' }}
+                              title="Edit Schedule"
+                              onClick={() => openEditSession(session)}
+                            >
+                              <Eye size={14} />
+                              <span>Edit</span>
                             </button>
                           )}
                         </td>
@@ -797,6 +865,99 @@ export const LiveClassroomView: React.FC<LiveClassroomViewProps> = ({ currentUse
                   disabled={isScheduling}
                 >
                   {isScheduling ? 'Scheduling...' : 'Publish Live Classroom Schedule'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT LIVE SESSION MODAL */}
+      {editingSession && (
+        <div className="modal-overlay" onClick={() => setEditingSession(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Live Class Schedule</h3>
+              <button className="btn-close" onClick={() => setEditingSession(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleEditSessionSubmit} className="modal-form">
+              <div className="form-group">
+                <label>Session Title:</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Graph Traversal & Dijkstra Algorithm"
+                  value={editSessionTitle}
+                  onChange={e => setEditSessionTitle(e.target.value)}
+                  className="form-control"
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Description & Agenda:</label>
+                <textarea
+                  placeholder="Topics covered, preparation requirements, Q&A"
+                  value={editSessionDescription}
+                  onChange={e => setEditSessionDescription(e.target.value)}
+                  className="form-control"
+                  rows={3}
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Meeting Provider:</label>
+                  <select
+                    value={editSessionProvider}
+                    onChange={e => setEditSessionProvider(e.target.value)}
+                    className="form-control"
+                  >
+                    <option value="jitsi">Jitsi Meet</option>
+                    <option value="google_meet">Google Meet</option>
+                    <option value="zoom">Zoom</option>
+                    <option value="teams">Microsoft Teams</option>
+                    <option value="custom">Custom Room URL</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Custom Room URL (Optional):</label>
+                  <input
+                    type="url"
+                    placeholder="https://meet.google.com/..."
+                    value={editSessionMeetingUrl}
+                    onChange={e => setEditSessionMeetingUrl(e.target.value)}
+                    className="form-control"
+                  />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start Date & Time:</label>
+                  <input
+                    type="datetime-local"
+                    value={editSessionStart}
+                    onChange={e => setEditSessionStart(e.target.value)}
+                    className="form-control"
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label>End Date & Time:</label>
+                  <input
+                    type="datetime-local"
+                    value={editSessionEnd}
+                    onChange={e => setEditSessionEnd(e.target.value)}
+                    className="form-control"
+                    required
+                  />
+                </div>
+              </div>
+              <div className="modal-actions">
+                <button type="button" className="btn btn-outline" onClick={() => setEditingSession(null)}>
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={isSavingEdit}>
+                  {isSavingEdit ? 'Saving...' : 'Save Schedule Changes'}
                 </button>
               </div>
             </form>

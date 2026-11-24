@@ -10,7 +10,8 @@ services:
       - ./frontend:/app
       - frontend_node_modules:/app/node_modules
     environment:
-      VITE_API_BASE_URL: http://localhost:8080/api/v1
+      VITE_API_BASE_URL: /api/v1
+      VITE_BACKEND_PROXY_TARGET: http://nginx
     depends_on:
       - nginx
 
@@ -18,7 +19,7 @@ services:
     build:
       context: ./backend
     working_dir: /var/www/html
-    command: sh -c "sed -i 's/pm.max_children = 5/pm.max_children = 25/g' /usr/local/etc/php-fpm.d/www.conf && php artisan migrate --force && php artisan db:seed --class=RoleAndPermissionSeeder --force && php-fpm -F"
+    command: sh -c "sed -i 's/pm.max_children = 5/pm.max_children = 25/g' /usr/local/etc/php-fpm.d/www.conf && php artisan migrate --force && php artisan db:seed --force && php-fpm -F"
     volumes:
       - ./backend:/var/www/html
     env_file:

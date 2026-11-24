@@ -87,7 +87,34 @@ function MainApp() {
   const isTeacher = hasRole('teacher');
   const isAdmin = hasRole(['super_admin', 'college_admin', 'dept_admin', 'hod']);
   const isStudent = hasRole('student') && !isAdmin && !isTeacher;
-  const canViewAcademic = isAdmin;
+
+  // Active portal modes
+  const isTeacherPortal = dashboardRoleMode === 'teacher' || (isTeacher && !isAdmin);
+  const isStudentPortal = dashboardRoleMode === 'student' || isStudent;
+  const isDeptAdminPortal = dashboardRoleMode === 'department';
+  const isInstitutionalAdminPortal = dashboardRoleMode === 'admin';
+
+  // Administration items visibility (Removed from Teacher and Student dashboards)
+  const canViewAdminSection = !isTeacherPortal && !isStudentPortal && isAdmin;
+  const canViewUserDirectory = canViewAdminSection;
+  const canViewAuditLogs = canViewAdminSection && (isSuperAdmin || hasRole('college_admin'));
+  const canViewBackups = canViewAdminSection && isSuperAdmin;
+
+  // Certificate: Available to Students (view/claim) and Admins (issue/verify), but explicitly removed from Teacher dashboard
+  const canViewCertificates = !isTeacherPortal;
+
+  // WordPress ('oni_lana'): Restricted exclusively to Super Admin
+  const canViewWordPress = isSuperAdmin && !isTeacherPortal && !isStudentPortal;
+
+  useEffect(() => {
+    if (isTeacherPortal && ['academic', 'users', 'audit_logs', 'backups', 'certificates', 'wordpress'].includes(currentView)) {
+      setCurrentView('dashboard');
+    } else if (isStudentPortal && ['academic', 'users', 'audit_logs', 'backups', 'wordpress'].includes(currentView)) {
+      setCurrentView('dashboard');
+    } else if (!isSuperAdmin && currentView === 'wordpress') {
+      setCurrentView('dashboard');
+    }
+  }, [dashboardRoleMode, currentView, isTeacherPortal, isStudentPortal, isSuperAdmin]);
 
   return (
     <div className="app-shell">
@@ -138,7 +165,7 @@ function MainApp() {
           <FileQuestion size={18} /> Examinations
         </button>
 
-        {canViewAcademic && (
+        {canViewAdminSection && (
           <>
             <div className="nav-label" style={{ marginTop: '16px' }}>ADMINISTRATION</div>
             <button
@@ -147,33 +174,39 @@ function MainApp() {
             >
               <Building2 size={18} /> Academic Setup
             </button>
-            <button
-              className={`nav-item ${currentView === 'users' && !learningCourseId ? 'active' : ''}`}
-              onClick={() => {
-                setCurrentView('users');
-                setLearningCourseId(null);
-              }}
-            >
-              <Users size={18} /> User Directory
-            </button>
-            <button
-              className={`nav-item ${currentView === 'audit_logs' && !learningCourseId ? 'active' : ''}`}
-              onClick={() => {
-                setCurrentView('audit_logs');
-                setLearningCourseId(null);
-              }}
-            >
-              <ShieldAlert size={18} color="#ef4444" /> Security Audit Logs
-            </button>
-            <button
-              className={`nav-item ${currentView === 'backups' && !learningCourseId ? 'active' : ''}`}
-              onClick={() => {
-                setCurrentView('backups');
-                setLearningCourseId(null);
-              }}
-            >
-              <HardDrive size={18} color="#10b981" /> Database &amp; Backups
-            </button>
+            {canViewUserDirectory && (
+              <button
+                className={`nav-item ${currentView === 'users' && !learningCourseId ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentView('users');
+                  setLearningCourseId(null);
+                }}
+              >
+                <Users size={18} /> User Directory
+              </button>
+            )}
+            {canViewAuditLogs && (
+              <button
+                className={`nav-item ${currentView === 'audit_logs' && !learningCourseId ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentView('audit_logs');
+                  setLearningCourseId(null);
+                }}
+              >
+                <ShieldAlert size={18} color="#ef4444" /> Security Audit Logs
+              </button>
+            )}
+            {canViewBackups && (
+              <button
+                className={`nav-item ${currentView === 'backups' && !learningCourseId ? 'active' : ''}`}
+                onClick={() => {
+                  setCurrentView('backups');
+                  setLearningCourseId(null);
+                }}
+              >
+                <HardDrive size={18} color="#10b981" /> Database &amp; Backups
+              </button>
+            )}
           </>
         )}
 
@@ -187,15 +220,17 @@ function MainApp() {
           <CalendarCheck size={18} /> Attendance
         </button>
 
-        <button
-          className={`nav-item ${currentView === 'certificates' && !learningCourseId ? 'active' : ''}`}
-          onClick={() => {
-            setCurrentView('certificates');
-            setLearningCourseId(null);
-          }}
-        >
-          <Award size={18} /> Certificates
-        </button>
+        {canViewCertificates && (
+          <button
+            className={`nav-item ${currentView === 'certificates' && !learningCourseId ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentView('certificates');
+              setLearningCourseId(null);
+            }}
+          >
+            <Award size={18} /> Certificates
+          </button>
+        )}
 
         <button
           className={`nav-item ${currentView === 'live_classroom' && !learningCourseId ? 'active' : ''}`}
@@ -227,15 +262,17 @@ function MainApp() {
           <Sparkles size={18} color="#eab308" /> AI Study Assistant
         </button>
 
-        <button
-          className={`nav-item ${currentView === 'wordpress' && !learningCourseId ? 'active' : ''}`}
-          onClick={() => {
-            setCurrentView('wordpress');
-            setLearningCourseId(null);
-          }}
-        >
-          <Globe size={18} color="#38bdf8" /> WordPress (`oni_lana`)
-        </button>
+        {canViewWordPress && (
+          <button
+            className={`nav-item ${currentView === 'wordpress' && !learningCourseId ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentView('wordpress');
+              setLearningCourseId(null);
+            }}
+          >
+            <Globe size={18} color="#38bdf8" /> WordPress (`oni_lana`)
+          </button>
+        )}
 
         <div className="sidebar-footer">
           {user ? (
@@ -343,7 +380,16 @@ function MainApp() {
             {currentView === 'live_classroom' && <LiveClassroomView currentUser={user} />}
             {currentView === 'analytics' && <AnalyticsView currentUser={user} />}
             {currentView === 'ai_assistant' && <AIAssistantView currentUser={user} />}
-            {currentView === 'wordpress' && <WordPressIntegrationView currentUser={user} />}
+            {currentView === 'wordpress' && (
+              isSuperAdmin ? (
+                <WordPressIntegrationView currentUser={user} />
+              ) : (
+                <div className="error-banner">
+                  <ShieldAlert size={20} />
+                  <span>Access restricted to Super Administrator.</span>
+                </div>
+              )
+            )}
             {currentView === 'dashboard' && (
               <>
                 {user && !isStudent && (

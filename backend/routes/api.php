@@ -72,6 +72,7 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/roles', [RoleController::class, 'index']);
             Route::apiResource('users', UserController::class);
             Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
+            Route::post('/users/bulk-enroll', [UserController::class, 'bulkEnroll']);
             Route::post('/students/import', [UserController::class, 'importStudents']);
         });
 
@@ -247,6 +248,7 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('live-sessions')->group(function (): void {
             Route::get('/upcoming', [LiveSessionController::class, 'upcoming']);
             Route::get('/{session}', [LiveSessionController::class, 'show']);
+            Route::put('/{session}', [LiveSessionController::class, 'update']);
             Route::post('/{session}/join', [LiveSessionController::class, 'join']);
             Route::post('/{session}/status', [LiveSessionController::class, 'updateStatus']);
             Route::delete('/{session}', [LiveSessionController::class, 'destroy']);
@@ -284,8 +286,8 @@ Route::prefix('v1')->group(function (): void {
             Route::get('/usage', [AiAssistantController::class, 'usageStats']);
         });
 
-        // WordPress Integration (Milestone 13 - oni_lana)
-        Route::prefix('integrations/wordpress')->group(function (): void {
+        // WordPress Integration (Milestone 13 - oni_lana) - Restricted to Super Admin
+        Route::prefix('integrations/wordpress')->middleware('role:super_admin')->group(function (): void {
             Route::get('/status', [WordPressIntegrationController::class, 'status']);
             Route::post('/sync-notices', [WordPressIntegrationController::class, 'syncNotices']);
             Route::get('/snippets', [WordPressIntegrationController::class, 'snippets']);

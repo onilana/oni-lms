@@ -9,7 +9,7 @@ class DepartmentRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('academic.manage') ?? false;
+        return $this->user()?->hasPermission('academic.manage') || ($this->user()?->isSuperAdmin() ?? false);
     }
 
     public function rules(): array
@@ -17,6 +17,12 @@ class DepartmentRequest extends FormRequest
         $departmentId = $this->route('department')?->id ?? $this->route('department');
 
         return [
+            'parent_id' => [
+                'nullable',
+                'uuid',
+                'exists:departments,id',
+                Rule::notIn($departmentId ? [$departmentId] : []),
+            ],
             'name' => ['required', 'string', 'max:255'],
             'code' => [
                 'required',

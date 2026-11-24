@@ -132,6 +132,7 @@ class AssignmentController
     private function canManage(Assignment $assignment, User $user): bool
     {
         return $assignment->course->isTaughtBy($user)
+            || $user->isSuperAdmin()
             || $user->hasPermission('assignments.delete');
     }
 }

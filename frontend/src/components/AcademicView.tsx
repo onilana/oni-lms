@@ -16,8 +16,8 @@ import type { Department, Programme, AcademicSession, Batch, Semester } from '..
 import { useAuth } from '../context/AuthContext';
 
 export const AcademicView: React.FC = () => {
-  const { hasPermission } = useAuth();
-  const canManage = hasPermission('academic.manage');
+  const { hasPermission, hasRole } = useAuth();
+  const canManage = hasPermission('academic.manage') || hasRole('super_admin');
 
   const [activeTab, setActiveTab] = useState<'departments' | 'programmes' | 'sessions' | 'batches'>('departments');
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -33,6 +33,7 @@ export const AcademicView: React.FC = () => {
   const [deptName, setDeptName] = useState('');
   const [deptCode, setDeptCode] = useState('');
   const [deptDesc, setDeptDesc] = useState('');
+  const [deptParentId, setDeptParentId] = useState('');
 
   const [isProgModalOpen, setIsProgModalOpen] = useState(false);
   const [progDeptId, setProgDeptId] = useState('');
@@ -47,6 +48,7 @@ export const AcademicView: React.FC = () => {
   const [editDeptCode, setEditDeptCode] = useState('');
   const [editDeptDesc, setEditDeptDesc] = useState('');
   const [editDeptStatus, setEditDeptStatus] = useState('active');
+  const [editDeptParentId, setEditDeptParentId] = useState('');
 
   // Semester modals (Edit & Create)
   const [editingSemester, setEditingSemester] = useState<Semester | null>(null);
@@ -107,6 +109,7 @@ export const AcademicView: React.FC = () => {
           name: deptName,
           code: deptCode,
           description: deptDesc,
+          parent_id: deptParentId || null,
           status: 'active',
         }),
       });
@@ -114,6 +117,7 @@ export const AcademicView: React.FC = () => {
       setDeptName('');
       setDeptCode('');
       setDeptDesc('');
+      setDeptParentId('');
       await fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating department');
@@ -149,6 +153,7 @@ export const AcademicView: React.FC = () => {
     setEditDeptCode(dept.code);
     setEditDeptDesc(dept.description || '');
     setEditDeptStatus(dept.status || 'active');
+    setEditDeptParentId(dept.parent_id || '');
   };
 
   const handleUpdateDepartment = async (e: React.FormEvent) => {
@@ -162,6 +167,7 @@ export const AcademicView: React.FC = () => {
           code: editDeptCode,
           description: editDeptDesc,
           status: editDeptStatus,
+          parent_id: editDeptParentId || null,
         }),
       });
       setDepartments((prev) => prev.map((d) => (d.id === res.department.id ? res.department : d)));
@@ -309,10 +315,20 @@ export const AcademicView: React.FC = () => {
                   </span>
                 </div>
                 <h3>{dept.name}</h3>
+                {dept.parent && (
+                  <div style={{ marginBottom: '4px' }}>
+                    <span className="badge badge-role" style={{ fontSize: '11px' }}>
+                      Sub-dept of: {dept.parent.name}
+                    </span>
+                  </div>
+                )}
                 <p>{dept.description || 'No description provided.'}</p>
                 <div className="card-footer">
                   <span><strong>{dept.programmes_count ?? 0}</strong> Programmes</span>
                   <span><strong>{dept.teachers_count ?? 0}</strong> Faculty</span>
+                  {dept.sub_departments && dept.sub_departments.length > 0 && (
+                    <span><strong>{dept.sub_departments.length}</strong> Sub-depts</span>
+                  )}
                   {canManage && (
                     <button
                       type="button"
@@ -479,6 +495,15 @@ export const AcademicView: React.FC = () => {
                 />
               </div>
               <div className="form-group">
+                <label>Parent Department (Optional — leave blank for top-level)</label>
+                <select value={deptParentId} onChange={(e) => setDeptParentId(e.target.value)}>
+                  <option value="">— None (Top-Level Department) —</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
                 <label>Description (Optional)</label>
                 <textarea
                   placeholder="Overview of the department and faculty..."
@@ -582,6 +607,17 @@ export const AcademicView: React.FC = () => {
                   value={editDeptName}
                   onChange={(e) => setEditDeptName(e.target.value)}
                 />
+              </div>
+              <div className="form-group">
+                <label>Parent Department (Optional — leave blank for top-level)</label>
+                <select value={editDeptParentId} onChange={(e) => setEditDeptParentId(e.target.value)}>
+                  <option value="">— None (Top-Level Department) —</option>
+                  {departments
+                    .filter((d) => d.id !== editingDept?.id)
+                    .map((d) => (
+                      <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                    ))}
+                </select>
               </div>
               <div className="form-group">
                 <label>Status</label>

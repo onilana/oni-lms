@@ -14,7 +14,7 @@ class DepartmentController
     {
         $query = Department::query()
             ->withCount(['programmes', 'teachers'])
-            ->with('headOfDepartment');
+            ->with(['headOfDepartment', 'parent', 'subDepartments']);
 
         if ($request->has('status')) {
             $query->where('status', $request->query('status'));
@@ -30,6 +30,7 @@ class DepartmentController
     public function store(DepartmentRequest $request): JsonResponse
     {
         $department = Department::create($request->validated());
+        $department->load(['headOfDepartment', 'parent', 'subDepartments']);
 
         return response()->json([
             'message' => 'Department created successfully.',
@@ -39,7 +40,7 @@ class DepartmentController
 
     public function show(Department $department): JsonResponse
     {
-        $department->load(['headOfDepartment', 'programmes'])
+        $department->load(['headOfDepartment', 'programmes', 'parent', 'subDepartments'])
             ->loadCount(['programmes', 'teachers']);
 
         return response()->json([
@@ -50,6 +51,7 @@ class DepartmentController
     public function update(DepartmentRequest $request, Department $department): JsonResponse
     {
         $department->update($request->validated());
+        $department->load(['headOfDepartment', 'parent', 'subDepartments']);
 
         return response()->json([
             'message' => 'Department updated successfully.',

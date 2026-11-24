@@ -9,6 +9,10 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Str;
 
+/**
+ * @property string $id
+ * @property string $title
+ */
 class LiveSession extends Model
 {
     use HasFactory, HasUuids;

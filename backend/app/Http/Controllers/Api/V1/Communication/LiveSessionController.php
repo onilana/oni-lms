@@ -191,10 +191,35 @@ class LiveSessionController
         ]);
     }
 
+    public function update(LiveSession $session, Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if ($session->instructor_id !== $user->id && !$user->isSuperAdmin() && !$user->hasRole([Role::COLLEGE_ADMIN, Role::DEPT_ADMIN])) {
+            return response()->json(['message' => 'Unauthorized to edit this live class schedule.'], 403);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'description' => 'nullable|string',
+            'scheduled_start_at' => 'required|date',
+            'scheduled_end_at' => 'required|date|after:scheduled_start_at',
+            'provider' => 'sometimes|string|in:jitsi,zoom,google_meet,custom',
+            'meeting_url' => 'nullable|string|url|max:1000',
+            'status' => 'sometimes|string|in:scheduled,live,completed,cancelled',
+        ]);
+
+        $session->update($validated);
+
+        return response()->json([
+            'message' => 'Live class schedule updated successfully.',
+            'data' => new LiveSessionResource($session->load(['course', 'instructor'])),
+        ]);
+    }
+
     public function updateStatus(LiveSession $session, Request $request): JsonResponse
     {
         $user = $request->user();
-        if ($session->instructor_id !== $user->id && !$user->hasRole([Role::SUPER_ADMIN, Role::COLLEGE_ADMIN])) {
+        if ($session->instructor_id !== $user->id && !$user->isSuperAdmin() && !$user->hasRole([Role::COLLEGE_ADMIN, Role::DEPT_ADMIN])) {
             return response()->json(['message' => 'Only the session instructor or administrator can update session status.'], 403);
         }
 
@@ -225,7 +250,7 @@ class LiveSessionController
     public function destroy(LiveSession $session, Request $request): JsonResponse
     {
         $user = $request->user();
-        if ($session->instructor_id !== $user->id && !$user->hasRole([Role::SUPER_ADMIN, Role::COLLEGE_ADMIN])) {
+        if ($session->instructor_id !== $user->id && !$user->isSuperAdmin() && !$user->hasRole([Role::COLLEGE_ADMIN, Role::DEPT_ADMIN])) {
             return response()->json(['message' => 'Unauthorized to cancel this session.'], 403);
         }
 

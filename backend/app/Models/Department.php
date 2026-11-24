@@ -8,17 +8,33 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property string $id
+ * @property string $name
+ * @property string $code
+ */
 class Department extends Model
 {
     use HasFactory, HasUuids;
 
     protected $fillable = [
+        'parent_id',
         'name',
         'code',
         'description',
         'status',
         'head_of_department_id',
     ];
+
+    public function parent(): BelongsTo
+    {
+        return $this->belongsTo(Department::class, 'parent_id');
+    }
+
+    public function subDepartments(): HasMany
+    {
+        return $this->hasMany(Department::class, 'parent_id');
+    }
 
     public function headOfDepartment(): BelongsTo
     {

@@ -73,6 +73,25 @@ export const ExamsView: React.FC = () => {
   const [qOptD, setQOptD] = useState('');
   const [qCorrectChoice, setQCorrectChoice] = useState('a');
   const [qCorrectChoices, setQCorrectChoices] = useState<string[]>(['a']);
+
+  // Edit Question modal
+  const [isEditQuestionOpen, setIsEditQuestionOpen] = useState(false);
+  const [editingQuestion, setEditingQuestion] = useState<Question | null>(null);
+  const [editQText, setEditQText] = useState('');
+  const [editQPoints, setEditQPoints] = useState(2.0);
+  const [editQExplanation, setEditQExplanation] = useState('');
+  const [editQOptA, setEditQOptA] = useState('');
+  const [editQOptB, setEditQOptB] = useState('');
+  const [editQOptC, setEditQOptC] = useState('');
+  const [editQOptD, setEditQOptD] = useState('');
+  const [editQCorrectChoice, setEditQCorrectChoice] = useState('a');
+  const [editQCorrectChoices, setEditQCorrectChoices] = useState<string[]>(['a']);
+
+  // Manage Questions modal
+  const [isManageQuestionsOpen, setIsManageQuestionsOpen] = useState(false);
+  const [manageQuestionsExam, setManageQuestionsExam] = useState<Exam | null>(null);
+  const [examQuestions, setExamQuestions] = useState<Question[]>([]);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
   const selectedCourseIdRef = useRef(selectedCourseId);
   selectedCourseIdRef.current = selectedCourseId;
   const examsLoadIdRef = useRef(0);
@@ -221,6 +240,82 @@ export const ExamsView: React.FC = () => {
       }
     } catch (err: any) {
       alert(err.message || 'Error updating exam');
+    }
+  };
+
+  const loadExamQuestions = async (exam: Exam) => {
+    setLoadingQuestions(true);
+    try {
+      const res = await apiRequest<{ data: Question[] }>(`/exams/${exam.id}/questions`);
+      setExamQuestions(res.data || []);
+    } catch (err: any) {
+      alert(err.message || 'Failed to load questions');
+    } finally {
+      setLoadingQuestions(false);
+    }
+  };
+
+  const openManageQuestions = async (exam: Exam) => {
+    setManageQuestionsExam(exam);
+    setIsManageQuestionsOpen(true);
+    await loadExamQuestions(exam);
+  };
+
+  const openEditQuestion = (q: Question) => {
+    setEditingQuestion(q);
+    setEditQText(q.question_text);
+    setEditQPoints(q.points);
+    setEditQExplanation(q.explanation || '');
+    const opts = q.options as Array<{ id: string; text: string }> | null;
+    if (opts) {
+      setEditQOptA(opts.find(o => o.id === 'a')?.text || '');
+      setEditQOptB(opts.find(o => o.id === 'b')?.text || '');
+      setEditQOptC(opts.find(o => o.id === 'c')?.text || '');
+      setEditQOptD(opts.find(o => o.id === 'd')?.text || '');
+    }
+    const ca = q.correct_answers as string[];
+    if (q.question_type === 'mcq_multiple') {
+      setEditQCorrectChoices(ca || ['a']);
+      setEditQCorrectChoice(ca?.[0] || 'a');
+    } else {
+      setEditQCorrectChoice(ca?.[0] || 'a');
+      setEditQCorrectChoices(ca || ['a']);
+    }
+    setIsEditQuestionOpen(true);
+  };
+
+  const handleUpdateQuestion = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingQuestion) return;
+    try {
+      const opts = (editingQuestion.question_type === 'mcq_single' || editingQuestion.question_type === 'mcq_multiple')
+        ? [
+            { id: 'a', text: editQOptA },
+            { id: 'b', text: editQOptB },
+            ...(editQOptC.trim() ? [{ id: 'c', text: editQOptC }] : []),
+            ...(editQOptD.trim() ? [{ id: 'd', text: editQOptD }] : []),
+          ]
+        : editingQuestion.options;
+      const correctAnswers = editingQuestion.question_type === 'mcq_multiple'
+        ? editQCorrectChoices
+        : [editQCorrectChoice];
+      await apiRequest(`/questions/${editingQuestion.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          question_text: editQText,
+          options: opts,
+          correct_answers: correctAnswers,
+          points: Number(editQPoints),
+          explanation: editQExplanation,
+        }),
+      });
+      setIsEditQuestionOpen(false);
+      setEditingQuestion(null);
+      if (manageQuestionsExam) {
+        await loadExamQuestions(manageQuestionsExam);
+      }
+    } catch (err: any) {
+      alert(err.message || 'Failed to update question');
     }
   };
 
@@ -437,17 +532,23 @@ export const ExamsView: React.FC = () => {
                   )}
 
                   {isStaff && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px', marginTop: '6px' }}>
                       <button
                         className="btn btn-outline btn-sm"
-                        style={{ flex: 1 }}
                         title="Add Question to Exam"
                         onClick={() => {
                           setTargetExam(exam);
                           setIsAddQuestionOpen(true);
                         }}
                       >
-                        <Plus size={14} /> Add Question
+                        <Plus size={14} /> Add
+                      </button>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        title="View and Edit Questions"
+                        onClick={() => openManageQuestions(exam)}
+                      >
+                        <FileQuestion size={14} /> Questions
                       </button>
                       <button
                         className="btn btn-secondary btn-sm"
@@ -936,6 +1037,283 @@ export const ExamsView: React.FC = () => {
                 </button>
                 <button type="submit" className="btn btn-primary">
                   Save Question
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Exam Questions Modal */}
+      {isManageQuestionsOpen && manageQuestionsExam && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '720px' }}>
+            <div className="modal-header">
+              <h3>Manage Questions: {manageQuestionsExam.title}</h3>
+              <button className="btn-icon" onClick={() => setIsManageQuestionsOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <div className="modal-body" style={{ maxHeight: '65vh', overflowY: 'auto' }}>
+              {loadingQuestions ? (
+                <p>Loading questions...</p>
+              ) : examQuestions.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                  <FileQuestion size={40} style={{ color: '#94a3b8', marginBottom: '8px' }} />
+                  <p>No questions attached to this examination yet.</p>
+                  <button
+                    className="btn btn-primary btn-sm"
+                    onClick={() => {
+                      setTargetExam(manageQuestionsExam);
+                      setIsAddQuestionOpen(true);
+                    }}
+                  >
+                    <Plus size={14} /> Add First Question
+                  </button>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  {examQuestions.map((q, idx) => (
+                    <div
+                      key={q.id}
+                      style={{
+                        padding: '12px',
+                        border: '1px solid #e2e8f0',
+                        borderRadius: '6px',
+                        background: '#f8fafc',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'flex-start',
+                        gap: '12px',
+                      }}
+                    >
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '4px' }}>
+                          <span className="badge badge-role">Q{idx + 1}</span>
+                          <span className="badge badge-duration">{q.points} Marks</span>
+                          <span className="text-muted" style={{ fontSize: '11px' }}>{q.question_type}</span>
+                        </div>
+                        <p style={{ margin: '4px 0', fontWeight: 600 }}>{q.question_text}</p>
+                        {Array.isArray(q.options) && q.options.length > 0 && (
+                          <div style={{ fontSize: '12px', color: '#64748b', marginTop: '4px' }}>
+                            {q.options.map((opt: any) => (
+                              <span key={opt.id} style={{ marginRight: '10px' }}>
+                                <strong>{opt.id.toUpperCase()}:</strong> {opt.text}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {q.explanation && (
+                          <small style={{ color: '#0284c7', display: 'block', marginTop: '4px' }}>
+                            Explanation: {q.explanation}
+                          </small>
+                        )}
+                      </div>
+                      <button
+                        className="btn btn-outline btn-sm"
+                        onClick={() => openEditQuestion(q)}
+                        title="Edit Question"
+                      >
+                        <Edit2 size={13} /> Edit
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="modal-footer" style={{ display: 'flex', justifyContent: 'space-between' }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setTargetExam(manageQuestionsExam);
+                  setIsAddQuestionOpen(true);
+                }}
+              >
+                <Plus size={14} /> Add Another Question
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary btn-sm"
+                onClick={() => setIsManageQuestionsOpen(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Question Modal */}
+      {isEditQuestionOpen && editingQuestion && (
+        <div className="modal-overlay">
+          <div className="modal-container" style={{ maxWidth: '580px' }}>
+            <div className="modal-header">
+              <h3>Edit Question ({editingQuestion.question_type})</h3>
+              <button className="btn-icon" onClick={() => setIsEditQuestionOpen(false)}>
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleUpdateQuestion}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Question Prompt / Text</label>
+                  <textarea
+                    className="form-control"
+                    rows={3}
+                    value={editQText}
+                    onChange={(e) => setEditQText(e.target.value)}
+                    required
+                  />
+                </div>
+
+                {(editingQuestion.question_type === 'mcq_single' || editingQuestion.question_type === 'mcq_multiple') && (
+                  <div className="options-input-group">
+                    <label>Options & Correct Answer</label>
+                    <div className="option-input-row">
+                      <span className="opt-key">A</span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editQOptA}
+                        onChange={(e) => setEditQOptA(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="option-input-row">
+                      <span className="opt-key">B</span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editQOptB}
+                        onChange={(e) => setEditQOptB(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="option-input-row">
+                      <span className="opt-key">C</span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editQOptC}
+                        onChange={(e) => setEditQOptC(e.target.value)}
+                        placeholder="Option C (optional)"
+                      />
+                    </div>
+                    <div className="option-input-row">
+                      <span className="opt-key">D</span>
+                      <input
+                        type="text"
+                        className="form-control"
+                        value={editQOptD}
+                        onChange={(e) => setEditQOptD(e.target.value)}
+                        placeholder="Option D (optional)"
+                      />
+                    </div>
+
+                    {editingQuestion.question_type === 'mcq_single' ? (
+                      <div className="form-group" style={{ marginTop: '10px' }}>
+                        <label>Correct Option Key</label>
+                        <select
+                          className="form-control"
+                          value={editQCorrectChoice}
+                          onChange={(e) => setEditQCorrectChoice(e.target.value)}
+                        >
+                          <option value="a">Option A</option>
+                          <option value="b">Option B</option>
+                          {editQOptC.trim() && <option value="c">Option C</option>}
+                          {editQOptD.trim() && <option value="d">Option D</option>}
+                        </select>
+                      </div>
+                    ) : (
+                      <div className="form-group" style={{ marginTop: '10px' }}>
+                        <label>Correct Option Keys</label>
+                        {[
+                          { id: 'a', text: 'Option A' },
+                          { id: 'b', text: 'Option B' },
+                          ...(editQOptC.trim() ? [{ id: 'c', text: 'Option C' }] : []),
+                          ...(editQOptD.trim() ? [{ id: 'd', text: 'Option D' }] : []),
+                        ].map((option) => (
+                          <label key={option.id} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <input
+                              type="checkbox"
+                              checked={editQCorrectChoices.includes(option.id)}
+                              onChange={(e) => setEditQCorrectChoices((current) =>
+                                e.target.checked
+                                  ? [...current, option.id]
+                                  : current.filter((id) => id !== option.id)
+                              )}
+                            />
+                            {option.text}
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {editingQuestion.question_type === 'true_false' && (
+                  <div className="form-group">
+                    <label>Correct Answer</label>
+                    <select
+                      className="form-control"
+                      value={editQCorrectChoice}
+                      onChange={(e) => setEditQCorrectChoice(e.target.value)}
+                    >
+                      <option value="true">True</option>
+                      <option value="false">False</option>
+                    </select>
+                  </div>
+                )}
+
+                {editingQuestion.question_type === 'short_answer' && (
+                  <div className="form-group">
+                    <label>Expected Short Answer</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      value={editQCorrectChoice}
+                      onChange={(e) => setEditQCorrectChoice(e.target.value)}
+                      required
+                    />
+                  </div>
+                )}
+
+                <div className="field-row">
+                  <div className="form-group">
+                    <label>Points / Marks</label>
+                    <input
+                      type="number"
+                      step="0.5"
+                      min="0.5"
+                      className="form-control"
+                      value={editQPoints}
+                      onChange={(e) => setEditQPoints(Number(e.target.value))}
+                      required
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label>Explanation / Feedback (Optional)</label>
+                    <input
+                      type="text"
+                      className="form-control"
+                      placeholder="Shown after completion"
+                      value={editQExplanation}
+                      onChange={(e) => setEditQExplanation(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="modal-footer">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsEditQuestionOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary">
+                  Save Changes
                 </button>
               </div>
             </form>

@@ -9,7 +9,7 @@ class SemesterRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('academic.manage') ?? false;
+        return $this->user()?->hasPermission('academic.manage') || ($this->user()?->isSuperAdmin() ?? false);
     }
 
     public function rules(): array

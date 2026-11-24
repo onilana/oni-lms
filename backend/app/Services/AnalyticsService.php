@@ -56,7 +56,7 @@ class AnalyticsService
             }
 
             // Assignments for course
-            $submissions = AssignmentSubmission::where('student_user_id', $student->id)
+            $submissions = AssignmentSubmission::where('user_id', $student->id)
                 ->whereHas('assignment', fn ($q) => $q->where('course_id', $course->id))
                 ->whereNotNull('score')
                 ->get();

@@ -6,6 +6,7 @@ use App\Http\Resources\UserResource;
 use App\Models\Role;
 use App\Models\StudentProfile;
 use App\Models\TeacherProfile;
+use App\Models\Department;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -275,18 +276,22 @@ class UserController
         ]);
     }
 
-    public function importStudents(Request $request): JsonResponse
+    public function bulkEnroll(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
 
-        $students = [];
+        $defaultRole = $request->input('default_role', Role::STUDENT);
+        $usersData = [];
+
         if ($request->hasFile('file')) {
             $file = $request->file('file');
             $content = file_get_contents($file->getRealPath());
             $lines = explode("\n", trim($content));
             $header = null;
             foreach ($lines as $line) {
-                $row = str_getcsv(trim($line));
+                $trimmed = trim($line);
+                if (empty($trimmed)) continue;
+                $row = str_getcsv($trimmed);
                 if (!$header) {
                     $header = array_map('trim', array_map('strtolower', $row));
                     continue;
@@ -296,23 +301,43 @@ class UserController
                     foreach ($header as $i => $col) {
                         $item[$col] = $row[$i] ?? null;
                     }
-                    $students[] = $item;
+                    $usersData[] = $item;
                 }
             }
+        } elseif ($request->has('users') && is_array($request->input('users'))) {
+            $usersData = $request->input('users');
         } elseif ($request->has('students') && is_array($request->input('students'))) {
-            $students = $request->input('students');
+            $usersData = $request->input('students');
         } else {
-            return response()->json(['message' => 'Please provide a CSV file or student array.'], 422);
+            return response()->json(['message' => 'Please provide a CSV file or users array.'], 422);
         }
 
         $imported = 0;
         $errors = [];
-        $studentRole = Role::where('name', Role::STUDENT)->first();
+        $breakdown = [
+            Role::COLLEGE_ADMIN => 0,
+            Role::HOD => 0,
+            Role::TEACHER => 0,
+            Role::STUDENT => 0,
+        ];
 
-        foreach ($students as $index => $row) {
+        $rolesMap = Role::all()->keyBy('name');
+
+        foreach ($usersData as $index => $row) {
             $name = $row['name'] ?? null;
             $email = $row['email'] ?? null;
-            $studentIdNum = $row['student_id_number'] ?? $row['student_id'] ?? ('STU-' . strtoupper(Str::random(6)));
+            $roleName = strtolower(trim($row['role'] ?? $defaultRole));
+
+            // Map common role aliases
+            if (in_array($roleName, ['admin', 'school_admin', 'college_admin', 'school admin'])) {
+                $roleName = Role::COLLEGE_ADMIN;
+            } elseif (in_array($roleName, ['hod', 'head of department', 'dept_head'])) {
+                $roleName = Role::HOD;
+            } elseif (in_array($roleName, ['teacher', 'professor', 'faculty', 'instructor', 'lecturer'])) {
+                $roleName = Role::TEACHER;
+            } else {
+                $roleName = Role::STUDENT;
+            }
 
             if (empty($name) || empty($email)) {
                 $errors[] = "Row " . ($index + 1) . ": Name and Email are required.";
@@ -324,32 +349,67 @@ class UserController
                 continue;
             }
 
+            $password = $row['password'] ?? ($roleName === Role::STUDENT ? 'Student@2026!' : 'Staff@2026!');
+            $phone = $row['phone'] ?? null;
+
             $user = User::create([
                 'name' => $name,
                 'email' => $email,
-                'password' => Hash::make($row['password'] ?? 'Student@2026'),
-                'phone' => $row['phone'] ?? null,
+                'password' => Hash::make($password),
+                'phone' => $phone,
                 'status' => 'active',
                 'email_verified_at' => now(),
             ]);
 
-            if ($studentRole) {
-                $user->roles()->attach($studentRole->id);
+            $roleModel = $rolesMap->get($roleName);
+            if ($roleModel) {
+                $user->roles()->syncWithoutDetaching([$roleModel->id]);
             }
 
-            StudentProfile::create([
-                'user_id' => $user->id,
-                'student_id_number' => $studentIdNum,
-                'admission_date' => now(),
-            ]);
+            // Create appropriate profile
+            if ($roleName === Role::STUDENT) {
+                $studentIdNum = $row['student_id_number'] ?? $row['student_id'] ?? ('STU-' . date('Y') . '-' . strtoupper(Str::random(5)));
+                StudentProfile::create([
+                    'user_id' => $user->id,
+                    'student_id_number' => $studentIdNum,
+                    'programme_id' => $row['programme_id'] ?? null,
+                    'batch_id' => $row['batch_id'] ?? null,
+                    'admission_date' => $row['admission_date'] ?? now(),
+                    'current_semester' => $row['current_semester'] ?? 1,
+                    'status' => 'active',
+                ]);
+            } elseif ($roleName === Role::TEACHER || $roleName === Role::HOD) {
+                $deptId = $row['department_id'] ?? null;
+                if (!$deptId) {
+                    $deptId = Department::value('id');
+                }
+                $empIdNum = $row['employee_id_number'] ?? $row['employee_id'] ?? ('FAC-' . date('Y') . '-' . strtoupper(Str::random(5)));
+                TeacherProfile::create([
+                    'user_id' => $user->id,
+                    'department_id' => $deptId,
+                    'employee_id_number' => $empIdNum,
+                    'designation' => $row['designation'] ?? ($roleName === Role::HOD ? 'Head of Department' : ($row['academic_designation'] ?? 'Professor')),
+                    'qualification' => $row['qualification'] ?? ($row['highest_qualification'] ?? 'Ph.D.'),
+                    'status' => 'active',
+                ]);
+            }
 
+            if (isset($breakdown[$roleName])) {
+                $breakdown[$roleName]++;
+            }
             $imported++;
         }
 
         return response()->json([
-            'message' => "Successfully imported {$imported} student(s).",
+            'message' => "Successfully enrolled {$imported} user(s) in bulk.",
             'imported_count' => $imported,
+            'breakdown' => $breakdown,
             'errors' => $errors,
         ]);
+    }
+
+    public function importStudents(Request $request): JsonResponse
+    {
+        return $this->bulkEnroll($request);
     }
 }

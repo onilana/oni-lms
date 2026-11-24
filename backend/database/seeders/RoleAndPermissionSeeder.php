@@ -112,14 +112,13 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // 3. Attach permissions to roles
-        // Teacher permissions
+        // Teacher permissions (Instructional, assignments, exams, attendance)
         $teacherPerms = [
             'academic.view', 'courses.view', 'courses.create', 'courses.update',
             'lessons.view', 'lessons.manage',
             'assignments.view', 'assignments.manage', 'assignments.grade',
             'exams.view', 'exams.manage', 'exams.grade',
             'attendance.view', 'attendance.mark',
-            'certificates.view', 'certificates.manage',
         ];
         $roles[Role::TEACHER]->permissions()->sync(
             collect($teacherPerms)->map(fn ($p) => $permissionModels[$p]->id)
@@ -168,7 +167,7 @@ class RoleAndPermissionSeeder extends Seeder
         );
 
         // 4. Default Super Admin User
-        $superAdmin = User::firstOrCreate(
+        $superAdmin = User::updateOrCreate(
             ['email' => 'admin@onilms.edu'],
             [
                 'name' => 'Super Administrator',
@@ -179,11 +178,11 @@ class RoleAndPermissionSeeder extends Seeder
         );
 
         if (! $superAdmin->hasRole(Role::SUPER_ADMIN)) {
-            $superAdmin->roles()->attach($roles[Role::SUPER_ADMIN]->id);
+            $superAdmin->roles()->syncWithoutDetaching([$roles[Role::SUPER_ADMIN]->id]);
         }
 
         // 5. Default Demo Student User
-        $demoStudent = User::firstOrCreate(
+        $demoStudent = User::updateOrCreate(
             ['email' => 'student@onilms.edu'],
             [
                 'name' => 'Aarav Sharma',
@@ -194,11 +193,11 @@ class RoleAndPermissionSeeder extends Seeder
         );
 
         if (! $demoStudent->hasRole(Role::STUDENT)) {
-            $demoStudent->roles()->attach($roles[Role::STUDENT]->id);
+            $demoStudent->roles()->syncWithoutDetaching([$roles[Role::STUDENT]->id]);
         }
 
         // 6. Default Demo Teacher User
-        $demoTeacher = User::firstOrCreate(
+        $demoTeacher = User::updateOrCreate(
             ['email' => 'teacher@onilms.edu'],
             [
                 'name' => 'Dr. Priya Ramanathan',
@@ -209,11 +208,11 @@ class RoleAndPermissionSeeder extends Seeder
         );
 
         if (! $demoTeacher->hasRole(Role::TEACHER)) {
-            $demoTeacher->roles()->attach($roles[Role::TEACHER]->id);
+            $demoTeacher->roles()->syncWithoutDetaching([$roles[Role::TEACHER]->id]);
         }
 
         // 7. Default Demo HOD / Department Admin User
-        $demoHod = User::firstOrCreate(
+        $demoHod = User::updateOrCreate(
             ['email' => 'hod@onilms.edu'],
             [
                 'name' => 'Prof. Vikram Sengupta',
@@ -224,7 +223,7 @@ class RoleAndPermissionSeeder extends Seeder
         );
 
         if (! $demoHod->hasRole(Role::HOD)) {
-            $demoHod->roles()->attach($roles[Role::HOD]->id);
+            $demoHod->roles()->syncWithoutDetaching([$roles[Role::HOD]->id]);
         }
     }
 }

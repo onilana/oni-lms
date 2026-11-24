@@ -9,12 +9,15 @@ import {
   CheckCircle,
   Database,
   Globe,
+  GripVertical,
   HardDrive,
   Layers,
   RefreshCw,
+  RotateCcw,
   Server,
   ShieldAlert,
   ShieldCheck,
+  Sparkles,
   Users
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
@@ -26,6 +29,20 @@ interface AdminDashboardViewProps {
   onNavigateTo: (view: 'academic' | 'courses' | 'users' | 'analytics' | 'audit_logs' | 'backups' | 'wordpress' | 'certificates') => void;
 }
 
+type WidgetId = 'metrics' | 'health' | 'audit' | 'roles' | 'backup' | 'tools';
+
+const DEFAULT_WIDGET_ORDER: WidgetId[] = ['metrics', 'health', 'roles', 'audit', 'backup', 'tools'];
+const STORAGE_KEY = 'oni_lms_super_admin_dashboard_order';
+
+const WIDGET_TITLES: Record<WidgetId, string> = {
+  metrics: 'Key Institutional KPI Metrics',
+  health: 'Modular Monolith Infrastructure Health',
+  roles: 'RBAC User Distribution',
+  audit: 'Security & Institutional Audit Trail',
+  backup: 'Disaster Recovery & Backup Snapshot',
+  tools: 'Administrative Control Tools',
+};
+
 export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   currentUser,
   onNavigateTo,
@@ -33,6 +50,26 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   const [data, setData] = useState<AdminDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Drag and Drop state
+  const [widgetOrder, setWidgetOrder] = useState<WidgetId[]>(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length === DEFAULT_WIDGET_ORDER.length) {
+          const isValid = DEFAULT_WIDGET_ORDER.every((id) => parsed.includes(id));
+          if (isValid) return parsed as WidgetId[];
+        }
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_WIDGET_ORDER;
+  });
+
+  const [draggedWidget, setDraggedWidget] = useState<WidgetId | null>(null);
+  const [dragOverWidget, setDragOverWidget] = useState<WidgetId | null>(null);
 
   useEffect(() => {
     loadAdminDashboard();
@@ -49,6 +86,53 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleDragStart = (e: React.DragEvent, id: WidgetId) => {
+    e.dataTransfer.setData('text/plain', id);
+    e.dataTransfer.effectAllowed = 'move';
+    setDraggedWidget(id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, id: WidgetId) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (dragOverWidget !== id) {
+      setDragOverWidget(id);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, targetId: WidgetId) => {
+    e.preventDefault();
+    if (!draggedWidget || draggedWidget === targetId) {
+      setDraggedWidget(null);
+      setDragOverWidget(null);
+      return;
+    }
+
+    const newOrder = [...widgetOrder];
+    const srcIndex = newOrder.indexOf(draggedWidget);
+    const targetIndex = newOrder.indexOf(targetId);
+
+    if (srcIndex !== -1 && targetIndex !== -1) {
+      newOrder.splice(srcIndex, 1);
+      newOrder.splice(targetIndex, 0, draggedWidget);
+      setWidgetOrder(newOrder);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newOrder));
+    }
+
+    setDraggedWidget(null);
+    setDragOverWidget(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedWidget(null);
+    setDragOverWidget(null);
+  };
+
+  const resetLayout = () => {
+    setWidgetOrder(DEFAULT_WIDGET_ORDER);
+    localStorage.removeItem(STORAGE_KEY);
   };
 
   if (loading) {
@@ -73,103 +157,78 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
   }
 
   const { college, metrics, system_health, roles_distribution, recent_audit_logs, latest_backup } = data;
+  const isSuperAdmin = currentUser?.roles.some((r) => r.name === 'super_admin') ?? false;
 
-  return (
-    <div className="dashboard-content">
-      {/* College Institutional Banner */}
-      <div className="hero-banner" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', color: '#fff', padding: '24px', borderRadius: '12px', marginBottom: '24px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <span className="badge" style={{ background: '#6366f1', color: '#fff', fontSize: '11px', textTransform: 'uppercase' }}>Institutional Control Center</span>
-              <span style={{ fontSize: '13px', opacity: 0.85 }}>{college.domain} · Session {college.academic_session}</span>
+  const renderWidgetContent = (id: WidgetId) => {
+    switch (id) {
+      case 'metrics':
+        return (
+          <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
+            <div className="stat-card">
+              <div className="stat-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+                <Users size={22} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Total Students</span>
+                <strong className="stat-value">{metrics.total_students}</strong>
+              </div>
             </div>
-            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>
-              {college.name}
-            </h2>
-            <p style={{ margin: '6px 0 0', opacity: 0.9, fontSize: '14px' }}>
-              College Administrative Console · {college.system_version}
-            </p>
-          </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <button className="btn btn-secondary" onClick={() => onNavigateTo('backups')}>
-              <HardDrive size={16} /> Backup System
-            </button>
-            <button className="btn btn-primary" onClick={() => onNavigateTo('audit_logs')}>
-              <ShieldAlert size={16} /> Audit Trail
-            </button>
-          </div>
-        </div>
-      </div>
 
-      {/* College KPI Metrics */}
-      <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
-            <Users size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Total Students</span>
-            <strong className="stat-value">{metrics.total_students}</strong>
-          </div>
-        </div>
+            <div className="stat-card">
+              <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
+                <Server size={22} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Faculty &amp; Staff</span>
+                <strong className="stat-value">{metrics.total_faculty}</strong>
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
-            <Server size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Faculty &amp; Staff</span>
-            <strong className="stat-value">{metrics.total_faculty}</strong>
-          </div>
-        </div>
+            <div className="stat-card">
+              <div className="stat-icon" style={{ background: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' }}>
+                <Building2 size={22} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Departments</span>
+                <strong className="stat-value">{metrics.total_departments}</strong>
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' }}>
-            <Building2 size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Departments</span>
-            <strong className="stat-value">{metrics.total_departments}</strong>
-          </div>
-        </div>
+            <div className="stat-card">
+              <div className="stat-icon" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' }}>
+                <BookOpen size={22} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Active Courses</span>
+                <strong className="stat-value">{metrics.total_courses}</strong>
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' }}>
-            <BookOpen size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Active Courses</span>
-            <strong className="stat-value">{metrics.total_courses}</strong>
-          </div>
-        </div>
+            <div className="stat-card">
+              <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
+                <Award size={22} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Certificates Issued</span>
+                <strong className="stat-value">{metrics.certificates_issued}</strong>
+              </div>
+            </div>
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
-            <Award size={22} />
+            <div className="stat-card">
+              <div className="stat-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
+                <CalendarCheck size={22} />
+              </div>
+              <div className="stat-info">
+                <span className="stat-label">Attendance Rate</span>
+                <strong className="stat-value">{metrics.overall_attendance_rate}%</strong>
+              </div>
+            </div>
           </div>
-          <div className="stat-info">
-            <span className="stat-label">Certificates Issued</span>
-            <strong className="stat-value">{metrics.certificates_issued}</strong>
-          </div>
-        </div>
+        );
 
-        <div className="stat-card">
-          <div className="stat-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
-            <CalendarCheck size={22} />
-          </div>
-          <div className="stat-info">
-            <span className="stat-label">Attendance Rate</span>
-            <strong className="stat-value">{metrics.overall_attendance_rate}%</strong>
-          </div>
-        </div>
-      </div>
-
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '24px' }}>
-        {/* Left Column: Infrastructure Health & Security Audit Feed */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* System Infrastructure Health Panel */}
-          <div className="panel">
+      case 'health':
+        return (
+          <div className="panel" style={{ height: '100%' }}>
             <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px' }}>Infrastructure &amp; Stack Operational Health</h3>
@@ -180,7 +239,7 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </span>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px', marginTop: '16px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '12px', marginTop: '16px' }}>
               <div style={{ padding: '12px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
                 <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Application Engine</div>
                 <strong style={{ display: 'block', margin: '4px 0 2px', fontSize: '14px' }}>Laravel {system_health.laravel_version}</strong>
@@ -206,9 +265,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </div>
             </div>
           </div>
+        );
 
-          {/* Security Audit Trail Snapshot */}
-          <div className="panel">
+      case 'audit':
+        return (
+          <div className="panel" style={{ height: '100%' }}>
             <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
                 <h3 style={{ margin: 0, fontSize: '18px' }}>Security &amp; Institutional Audit Trail</h3>
@@ -260,12 +321,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </table>
             </div>
           </div>
-        </div>
+        );
 
-        {/* Right Column: Roles Breakdown, Backup Status & Admin Tools */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
-          {/* RBAC Role Distribution */}
-          <div className="panel">
+      case 'roles':
+        return (
+          <div className="panel" style={{ height: '100%' }}>
             <div className="panel-heading">
               <h3 style={{ margin: 0, fontSize: '16px' }}>RBAC User Distribution</h3>
               <p style={{ margin: 0, fontSize: '12px', color: 'var(--text-muted)' }}>Active directory identities across 7 roles</p>
@@ -286,9 +346,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </button>
             </div>
           </div>
+        );
 
-          {/* Database & Backup Snapshot */}
-          <div className="panel">
+      case 'backup':
+        return (
+          <div className="panel" style={{ height: '100%' }}>
             <div className="panel-heading">
               <h3 style={{ margin: 0, fontSize: '16px' }}>Disaster Recovery Snapshot</h3>
             </div>
@@ -315,9 +377,11 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               </button>
             </div>
           </div>
+        );
 
-          {/* Institutional Shortcuts */}
-          <div className="panel">
+      case 'tools':
+        return (
+          <div className="panel" style={{ height: '100%' }}>
             <div className="panel-heading">
               <h3 style={{ margin: 0, fontSize: '16px' }}>Administrative Tools</h3>
             </div>
@@ -331,12 +395,76 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
               <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', padding: '10px 14px' }} onClick={() => onNavigateTo('certificates')}>
                 <Award size={16} color="#f59e0b" /> Digital Certificates &amp; Verification
               </button>
-              <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', padding: '10px 14px' }} onClick={() => onNavigateTo('wordpress')}>
-                <Globe size={16} color="#38bdf8" /> WordPress (`oni_lana`) Sync
-              </button>
+              {isSuperAdmin && (
+                <button className="btn btn-secondary" style={{ justifyContent: 'flex-start', padding: '10px 14px' }} onClick={() => onNavigateTo('wordpress')}>
+                  <Globe size={16} color="#38bdf8" /> WordPress (`oni_lana`) Sync
+                </button>
+              )}
             </div>
           </div>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <div className="dashboard-content">
+      {/* College Institutional Banner */}
+      <div className="hero-banner" style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%)', color: '#fff', padding: '24px', borderRadius: '12px', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <span className="badge" style={{ background: '#6366f1', color: '#fff', fontSize: '11px', textTransform: 'uppercase' }}>Institutional Control Center</span>
+              <span style={{ fontSize: '13px', opacity: 0.85 }}>{college.domain} · Session {college.academic_session}</span>
+              <span className="drag-drop-badge" title="Drag any section using its top bar to reposition it">
+                <Sparkles size={12} /> Drag &amp; Drop Enabled
+              </span>
+            </div>
+            <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>
+              {college.name}
+            </h2>
+            <p style={{ margin: '6px 0 0', opacity: 0.9, fontSize: '14px' }}>
+              College Administrative Console · {college.system_version} · Custom Layout Active
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <button className="btn btn-secondary btn-sm" onClick={resetLayout} title="Reset dashboard widgets to default layout">
+              <RotateCcw size={14} /> Reset Layout
+            </button>
+            <button className="btn btn-secondary btn-sm" onClick={() => onNavigateTo('backups')}>
+              <HardDrive size={14} /> Backup System
+            </button>
+            <button className="btn btn-primary btn-sm" onClick={() => onNavigateTo('audit_logs')}>
+              <ShieldAlert size={14} /> Audit Trail
+            </button>
+          </div>
         </div>
+      </div>
+
+      {/* Draggable Dashboard Grid */}
+      <div className="admin-draggable-grid">
+        {widgetOrder.map((id) => (
+          <div
+            key={id}
+            className={`admin-widget-card widget-${id} ${draggedWidget === id ? 'is-dragging' : ''} ${dragOverWidget === id ? 'drag-over' : ''}`}
+            draggable
+            onDragStart={(e) => handleDragStart(e, id)}
+            onDragOver={(e) => handleDragOver(e, id)}
+            onDrop={(e) => handleDrop(e, id)}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="widget-drag-bar" title="Click and drag to reorder this section on the dashboard">
+              <span className="widget-drag-bar-left">
+                <GripVertical size={14} />
+                {WIDGET_TITLES[id]}
+              </span>
+              <span>Drag to reorder</span>
+            </div>
+            {renderWidgetContent(id)}
+          </div>
+        ))}
       </div>
     </div>
   );
