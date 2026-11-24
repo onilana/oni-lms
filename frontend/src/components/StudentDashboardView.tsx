@@ -120,7 +120,7 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
           </div>
           <div className="student-hero-details">
             <div className="student-meta-top">
-              <span className="badge badge-roll">{student.student_id}</span>
+              <span className="badge badge-roll">{student.student_id_number || student.student_id}</span>
               <span className="badge badge-sem">Semester {student.current_semester}</span>
               <span className="badge badge-active">{student.status.toUpperCase()}</span>
             </div>
@@ -137,6 +137,58 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
         <button className="btn btn-secondary btn-sm refresh-btn" onClick={loadDashboard} title="Refresh workspace">
           <RefreshCw size={14} /> Refresh
         </button>
+      </section>
+
+      {/* Official Student Academic Details Card */}
+      <section className="panel" style={{ marginBottom: '24px' }}>
+        <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '17px' }}>Academic Profile Details</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Enrolled institutional record and cohort mapping</p>
+          </div>
+          <span className={`badge ${student.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ textTransform: 'uppercase' }}>
+            {student.status}
+          </span>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginTop: '16px' }}>
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>student_id_number</span>
+            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px', color: '#173f73' }}>{student.student_id_number || student.student_id}</strong>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>user_id</span>
+            <strong style={{ display: 'block', fontSize: '12px', marginTop: '4px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{student.user_id}</strong>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>programme_id</span>
+            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>{student.programme_id}</strong>
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{student.programme}</small>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>batch_id</span>
+            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>{student.batch_id}</strong>
+            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{student.batch}</small>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>admission_date</span>
+            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>{student.admission_date}</strong>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>current_semester</span>
+            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>Semester {student.current_semester}</strong>
+          </div>
+
+          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>status</span>
+            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px', textTransform: 'capitalize', color: student.status === 'active' ? '#10b981' : 'inherit' }}>{student.status}</strong>
+          </div>
+        </div>
       </section>
 
       {/* Metrics Highlights Bar */}

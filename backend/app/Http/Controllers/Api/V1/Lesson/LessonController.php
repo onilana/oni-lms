@@ -15,6 +15,11 @@ class LessonController
     public function index(Request $request, CourseSection $section): JsonResponse
     {
         $lessons = Lesson::where('section_id', $section->id)
+            ->with([
+                'course',
+                'section',
+                'progressRecords' => fn ($query) => $query->where('user_id', $request->user()?->id),
+            ])
             ->orderBy('order_index')
             ->get();
 
@@ -39,7 +44,11 @@ class LessonController
 
     public function show(Request $request, Lesson $lesson): JsonResponse
     {
-        $lesson->load(['course', 'section']);
+        $lesson->load([
+            'course',
+            'section',
+            'progressRecords' => fn ($query) => $query->where('user_id', $request->user()?->id),
+        ]);
 
         return response()->json([
             'lesson' => new LessonResource($lesson),
@@ -49,6 +58,11 @@ class LessonController
     public function update(LessonRequest $request, Lesson $lesson): JsonResponse
     {
         $lesson->update($request->validated());
+        $lesson->load([
+            'course',
+            'section',
+            'progressRecords' => fn ($query) => $query->where('user_id', $request->user()?->id),
+        ]);
 
         return response()->json([
             'message' => 'Lesson updated successfully.',

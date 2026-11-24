@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Exam;
 
-use App\Models\ExamAttempt;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,16 +14,28 @@ class ExamResource extends JsonResource
         $myLatestAttempt = null;
 
         if ($user) {
-            $myActiveAttempt = ExamAttempt::where('exam_id', $this->id)
-                ->where('user_id', $user->id)
-                ->where('status', 'in_progress')
-                ->latest()
-                ->first();
+            if ($this->relationLoaded('attempts')) {
+                $myActiveAttempt = $this->attempts
+                    ->where('status', 'in_progress')
+                    ->sortByDesc('started_at')
+                    ->first();
+                $myLatestAttempt = $this->attempts
+                    ->sortByDesc('started_at')
+                    ->first();
+            }
+        }
 
-            $myLatestAttempt = ExamAttempt::where('exam_id', $this->id)
-                ->where('user_id', $user->id)
-                ->latest()
-                ->first();
+        $includeSolutions = false;
+        if ($user) {
+            $includeSolutions = $user->isSuperAdmin() || $user->hasPermission('question_banks.manage');
+            if (! $includeSolutions) {
+                $includeSolutions = $this->course?->isTaughtBy($user) ?? false;
+            }
+        }
+        if ($this->relationLoaded('questions')) {
+            foreach ($this->questions as $question) {
+                $question->setAttribute('_include_solutions', $includeSolutions);
+            }
         }
 
         return [
@@ -41,7 +52,7 @@ class ExamResource extends JsonResource
             'shuffle_questions' => $this->shuffle_questions,
             'max_attempts' => $this->max_attempts,
             'is_published' => $this->is_published,
-            'questions_count' => $this->questions()->count(),
+            'questions_count' => $this->whenCounted('questions', $this->questions_count),
             'questions' => QuestionResource::collection($this->whenLoaded('questions')),
             'my_active_attempt' => $myActiveAttempt ? new ExamAttemptResource($myActiveAttempt) : null,
             'my_latest_attempt' => $myLatestAttempt ? new ExamAttemptResource($myLatestAttempt) : null,

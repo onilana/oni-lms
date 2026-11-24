@@ -43,8 +43,15 @@ class AttachQuestionsRequest extends FormRequest
                 return;
             }
 
+            $exam->loadMissing('course.department');
+            $questionIds = array_values(array_filter((array) $this->input('question_ids', [])));
+            $questions = Question::with('questionBank')
+                ->whereIn('id', $questionIds)
+                ->get()
+                ->keyBy('id');
+
             foreach ((array) $this->input('question_ids', []) as $index => $questionId) {
-                $question = Question::with('questionBank')->find($questionId);
+                $question = $questions->get($questionId);
                 if (! $question) {
                     continue;
                 }

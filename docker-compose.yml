@@ -18,6 +18,7 @@ services:
     build:
       context: ./backend
     working_dir: /var/www/html
+    command: sh -c "sed -i 's/pm.max_children = 5/pm.max_children = 25/g' /usr/local/etc/php-fpm.d/www.conf && php artisan migrate --force && php artisan db:seed --class=RoleAndPermissionSeeder --force && php-fpm -F"
     volumes:
       - ./backend:/var/www/html
     env_file:
@@ -32,6 +33,7 @@ services:
     image: nginx:1.27-alpine
     ports:
       - "8080:80"
+      - "8000:80"
     volumes:
       - ./backend:/var/www/html:ro
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro

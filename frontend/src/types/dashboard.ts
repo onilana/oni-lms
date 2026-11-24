@@ -1,13 +1,18 @@
 export interface StudentProfileInfo {
+  user_id: string;
   name: string;
   email: string;
   student_id: string;
+  student_id_number: string;
+  programme_id: string;
+  batch_id: string;
+  admission_date: string;
+  current_semester: number;
+  status: string;
   department: string;
   programme: string;
   batch: string;
-  current_semester: number;
   academic_session: string;
-  status: string;
 }
 
 export interface StudentMetrics {

@@ -187,6 +187,21 @@ class Course extends Model
 
     public function isTaughtBy(User $user): bool
     {
+        $cacheKey = 'oni-lms.course-teacher.'.implode('.', [$this->getKey(), $user->getKey()]);
+
+        if (app()->bound('request')) {
+            $request = request();
+            $cache = $request->attributes->get('_oni_lms_course_teacher_cache', []);
+            if (array_key_exists($cacheKey, $cache)) {
+                return $cache[$cacheKey];
+            }
+
+            $result = $this->teacherUsers()->where('users.id', $user->id)->exists();
+            $cache[$cacheKey] = $result;
+            $request->attributes->set('_oni_lms_course_teacher_cache', $cache);
+            return $result;
+        }
+
         return $this->teacherUsers()->where('users.id', $user->id)->exists();
     }
 

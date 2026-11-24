@@ -99,6 +99,14 @@ class AssignmentTest extends TestCase
 
     public function test_authenticated_user_can_list_published_assignments(): void
     {
+        Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'Draft assignment in published list',
+            'due_date' => now()->addDays(2),
+            'submission_type' => 'text',
+            'status' => 'draft',
+        ]);
+
         $response = $this->withHeader('Authorization', 'Bearer '.$this->enrolledToken)
             ->getJson('/api/v1/courses/'.$this->course->id.'/assignments');
 
@@ -116,7 +124,15 @@ class AssignmentTest extends TestCase
                 ],
             ]);
 
-        $this->assertCount(2, $response->json('assignments'));
+        $assignments = collect($response->json('assignments'));
+        $publishedIds = Assignment::where('course_id', $this->course->id)
+            ->where('status', 'published')
+            ->pluck('id')
+            ->all();
+        $draftId = Assignment::where('title', 'Draft assignment in published list')->value('id');
+
+        $this->assertEqualsCanonicalizing($publishedIds, $assignments->pluck('id')->all());
+        $this->assertNotContains($draftId, $assignments->pluck('id')->all());
     }
 
     public function test_students_cannot_view_or_delete_draft_assignments(): void
@@ -510,7 +526,14 @@ class AssignmentTest extends TestCase
 
     public function test_grading_fails_if_score_exceeds_max_score(): void
     {
-        $assignment = Assignment::where('course_id', $this->course->id)->first(); // max_score = 100
+        $assignment = Assignment::create([
+            'course_id' => $this->course->id,
+            'title' => 'Explicit 50-point grading assignment',
+            'due_date' => now()->addDay(),
+            'submission_type' => 'text',
+            'status' => 'published',
+            'max_score' => 50,
+        ]);
 
         $submission = AssignmentSubmission::create([
             'assignment_id' => $assignment->id,
@@ -519,10 +542,18 @@ class AssignmentTest extends TestCase
             'status' => 'submitted',
         ]);
 
+        $this->withHeader('Authorization', 'Bearer '.$this->teacherToken)
+            ->postJson('/api/v1/submissions/'.$submission->id.'/grade', [
+                'score' => 50,
+                'feedback' => 'Maximum score.',
+            ])
+            ->assertOk()
+            ->assertJsonPath('submission.score', 50);
+
         $response = $this->withHeader('Authorization', 'Bearer '.$this->teacherToken)
             ->postJson('/api/v1/submissions/'.$submission->id.'/grade', [
-                'score' => 150, // Exceeds 100
-                'feedback' => 'Impossible score.',
+                'score' => 51,
+                'feedback' => 'Exceeds the assignment maximum.',
             ]);
 
         $response->assertStatus(422)

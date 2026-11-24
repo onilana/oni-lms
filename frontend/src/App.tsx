@@ -85,7 +85,9 @@ function MainApp() {
 
   const isSuperAdmin = hasRole('super_admin');
   const isTeacher = hasRole('teacher');
-  const canViewAcademic = hasPermission('academic.view') || isSuperAdmin;
+  const isAdmin = hasRole(['super_admin', 'college_admin', 'dept_admin', 'hod']);
+  const isStudent = hasRole('student') && !isAdmin && !isTeacher;
+  const canViewAcademic = isAdmin;
 
   return (
     <div className="app-shell">
@@ -344,7 +346,7 @@ function MainApp() {
             {currentView === 'wordpress' && <WordPressIntegrationView currentUser={user} />}
             {currentView === 'dashboard' && (
               <>
-                {user && (
+                {user && !isStudent && (
                   <div
                     className="dashboard-portal-switcher"
                     style={{

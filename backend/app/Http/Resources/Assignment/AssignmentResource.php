@@ -3,7 +3,6 @@
 namespace App\Http\Resources\Assignment;
 
 use App\Http\Resources\Course\CourseResource;
-use App\Models\AssignmentSubmission;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -15,10 +14,11 @@ class AssignmentResource extends JsonResource
         $mySubmission = null;
 
         if ($user) {
-            $sub = AssignmentSubmission::where('assignment_id', $this->id)
-                ->where('user_id', $user->id)
-                ->with('grader')
-                ->first();
+            $sub = $this->relationLoaded('submissions')
+                ? $this->submissions->first(fn ($submission) =>
+                    $submission->assignment_id === $this->id && $submission->user_id === $user->id
+                )
+                : null;
 
             if ($sub) {
                 $mySubmission = new AssignmentSubmissionResource($sub);

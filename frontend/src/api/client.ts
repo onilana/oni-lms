@@ -1,4 +1,26 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8000/api/v1';
+import { normalizeAnswerSnapshot } from '../types/exam';
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+
+function normalizeAttemptAnswerSnapshots(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map(normalizeAttemptAnswerSnapshots);
+  }
+  if (!value || typeof value !== 'object') {
+    return value;
+  }
+
+  const record = value as Record<string, unknown>;
+  const normalized: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(record)) {
+    if (key === 'answers_snapshot') {
+      normalized[key] = normalizeAnswerSnapshot(item);
+    } else {
+      normalized[key] = normalizeAttemptAnswerSnapshots(item);
+    }
+  }
+  return normalized;
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public errors?: Record<string, string[]>) {
@@ -39,7 +61,7 @@ export async function apiRequest<T>(
     throw new ApiError(response.status, message, data?.errors);
   }
 
-  return data as T;
+  return normalizeAttemptAnswerSnapshots(data) as T;
 }
 
 export async function apiDownload(endpoint: string, filename: string): Promise<void> {

@@ -22,6 +22,32 @@ export interface Question {
 
 export type AttemptStatus = 'in_progress' | 'submitted' | 'timed_out' | 'evaluated';
 
+export type AnswerValue = string | string[];
+export type AnswerSnapshot = Record<string, AnswerValue>;
+
+export function normalizeAnswerSnapshot(value: unknown): AnswerSnapshot {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return {};
+  }
+
+  const snapshot: AnswerSnapshot = {};
+  for (const [questionId, answer] of Object.entries(value)) {
+    if (typeof answer === 'string') {
+      snapshot[questionId] = answer;
+    } else if (Array.isArray(answer)) {
+      const normalized = answer
+        .filter((item): item is string | number | boolean => (
+          typeof item === 'string' || typeof item === 'number' || typeof item === 'boolean'
+        ))
+        .map((item) => String(item));
+      snapshot[questionId] = normalized;
+    } else if (typeof answer === 'number' || typeof answer === 'boolean') {
+      snapshot[questionId] = String(answer);
+    }
+  }
+  return snapshot;
+}
+
 export interface ExamAttempt {
   id: string;
   exam_id: string;
@@ -35,7 +61,7 @@ export interface ExamAttempt {
   score?: number | null;
   percentage?: number | null;
   is_passed?: boolean | null;
-  answers_snapshot?: Record<string, any> | null;
+  answers_snapshot?: AnswerSnapshot | null;
   created_at?: string;
 }
 

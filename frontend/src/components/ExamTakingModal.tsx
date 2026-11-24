@@ -12,7 +12,7 @@ import {
   XCircle
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
-import type { Exam, ExamAttempt, Question } from '../types/exam';
+import type { AnswerSnapshot, Exam, ExamAttempt, Question } from '../types/exam';
 
 interface ExamTakingModalProps {
   exam: Exam;
@@ -50,10 +50,10 @@ export const ExamTakingModal: React.FC<ExamTakingModalProps> = ({
   const [currentIndex, setCurrentIndex] = useState(0);
 
   // Student answer state: questionId -> value (string | string[])
-  const [answers, setAnswers] = useState<Record<string, any>>(
+  const [answers, setAnswers] = useState<AnswerSnapshot>(
     initialAttempt.answers_snapshot || {}
   );
-  const answersRef = useRef<Record<string, any>>(initialAttempt.answers_snapshot || {});
+  const answersRef = useRef<AnswerSnapshot>(initialAttempt.answers_snapshot || {});
   const resultRef = useRef<ExamAttempt | null>(
     initialAttempt.status === 'evaluated' ? initialAttempt : null
   );

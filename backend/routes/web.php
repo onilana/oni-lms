@@ -8,3 +8,9 @@ Route::get('/', function () {
         'message' => 'Use the versioned API under /api/v1.',
     ]);
 });
+
+Route::get('/login', function () {
+    return response()->json([
+        'message' => 'Unauthenticated.',
+    ], 401);
+})->name('login');

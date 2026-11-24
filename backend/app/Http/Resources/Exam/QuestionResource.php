@@ -13,14 +13,28 @@ class QuestionResource extends JsonResource
     {
         $user = $request->user();
         $includeSolutions = false;
-        if ($user) {
+        if ($this->getAttribute('_include_solutions') !== null) {
+            $includeSolutions = (bool) $this->getAttribute('_include_solutions');
+        } elseif ($user) {
             $includeSolutions = $user->isSuperAdmin() || $user->hasPermission('question_banks.manage');
 
             if (! $includeSolutions) {
-                $courseId = $this->pivot?->exam_id
-                    ? Exam::query()->whereKey($this->pivot->exam_id)->value('course_id')
-                    : $this->course_id;
-                $course = $courseId ? Course::find($courseId) : null;
+                if ($this->pivot?->exam_id) {
+                    $cacheKey = 'exam-solution-course-'.$this->pivot->exam_id;
+                    $cache = $request->attributes->get('_oni_lms_exam_solution_cache', []);
+                    if (! array_key_exists($cacheKey, $cache)) {
+                        $cache[$cacheKey] = Exam::query()
+                            ->with('course')
+                            ->whereKey($this->pivot->exam_id)
+                            ->first()?->course;
+                        $request->attributes->set('_oni_lms_exam_solution_cache', $cache);
+                    }
+                    $course = $cache[$cacheKey];
+                } else {
+                    $course = $this->relationLoaded('course')
+                        ? $this->course
+                        : ($this->course_id ? Course::find($this->course_id) : null);
+                }
                 $includeSolutions = $course?->isTaughtBy($user) ?? false;
             }
         }

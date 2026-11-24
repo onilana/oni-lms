@@ -24,13 +24,14 @@ class QuestionController
             $query->where('question_bank_id', $request->query('question_bank_id'));
         }
 
-        $questions = $query->latest()->get();
+        $questions = $query->with('course')->latest()->get();
 
         return QuestionResource::collection($questions);
     }
 
     public function show(Question $question): QuestionResource
     {
+        $question->load('course');
         return new QuestionResource($question);
     }
 

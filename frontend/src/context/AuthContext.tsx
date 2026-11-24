@@ -8,7 +8,7 @@ interface AuthContextType {
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  hasRole: (role: string) => boolean;
+  hasRole: (role: string | string[]) => boolean;
   hasPermission: (permission: string) => boolean;
 }
 
@@ -67,9 +67,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const hasRole = (role: string): boolean => {
+  const hasRole = (role: string | string[]): boolean => {
     if (!user) return false;
-    return user.roles.some((r) => r.name === role || r.name === 'super_admin');
+    const roleList = Array.isArray(role) ? role : [role];
+    return user.roles.some((r) => roleList.includes(r.name) || r.name === 'super_admin');
   };
 
   const hasPermission = (permission: string): boolean => {

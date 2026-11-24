@@ -14,8 +14,13 @@ class CourseSectionController
 {
     public function index(Request $request, Course $course): JsonResponse
     {
+        $userId = $request->user()?->id;
         $sections = CourseSection::where('course_id', $course->id)
-            ->with(['lessons'])
+            ->with([
+                'lessons.course',
+                'lessons.section',
+                'lessons.progressRecords' => fn ($query) => $query->where('user_id', $userId),
+            ])
             ->orderBy('order_index')
             ->get();
 
@@ -30,7 +35,11 @@ class CourseSectionController
         $data['course_id'] = $course->id;
 
         $section = CourseSection::create($data);
-        $section->load('lessons');
+        $section->load([
+            'lessons.course',
+            'lessons.section',
+            'lessons.progressRecords' => fn ($query) => $query->where('user_id', $request->user()?->id),
+        ]);
 
         return response()->json([
             'message' => 'Section created successfully.',
@@ -38,11 +47,15 @@ class CourseSectionController
         ], 201);
     }
 
-    public function show(Course $course, CourseSection $section): JsonResponse
+    public function show(Request $request, Course $course, CourseSection $section): JsonResponse
     {
         abort_unless($section->course_id === $course->id, 404);
 
-        $section->load('lessons');
+        $section->load([
+            'lessons.course',
+            'lessons.section',
+            'lessons.progressRecords' => fn ($query) => $query->where('user_id', $request->user()?->id),
+        ]);
 
         return response()->json([
             'section' => new CourseSectionResource($section),
@@ -54,7 +67,11 @@ class CourseSectionController
         abort_unless($section->course_id === $course->id, 404);
 
         $section->update($request->validated());
-        $section->load('lessons');
+        $section->load([
+            'lessons.course',
+            'lessons.section',
+            'lessons.progressRecords' => fn ($query) => $query->where('user_id', $request->user()?->id),
+        ]);
 
         return response()->json([
             'message' => 'Section updated successfully.',

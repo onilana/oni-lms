@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources\Lesson;
 
-use App\Models\LessonProgress;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -13,12 +12,13 @@ class LessonResource extends JsonResource
         $user = $request->user();
         $isAccessible = $this->isAccessibleBy($user);
 
-        // Fetch user progress record if authenticated
         $progress = null;
         if ($user) {
-            $progressRecord = LessonProgress::where('lesson_id', $this->id)
-                ->where('user_id', $user->id)
-                ->first();
+            $progressRecord = $this->relationLoaded('progressRecords')
+                ? $this->progressRecords->first(fn ($record) =>
+                    $record->lesson_id === $this->id && $record->user_id === $user->id
+                )
+                : null;
 
             if ($progressRecord) {
                 $progress = [

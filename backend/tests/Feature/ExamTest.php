@@ -224,7 +224,9 @@ class ExamTest extends TestCase
         $this->actingAs($otherTeacher)
             ->getJson("/api/v1/exams/{$exam->id}")
             ->assertOk()
-            ->assertJsonMissingPath('data.questions.0.correct_answers');
+            ->assertJsonPath('data.questions.0.id', $question->id)
+            ->assertJsonMissingPath('data.questions.0.correct_answers')
+            ->assertJsonMissingPath('data.questions.0.explanation');
     }
 
     public function test_single_choice_correct_answer_must_reference_an_option(): void
@@ -356,7 +358,9 @@ class ExamTest extends TestCase
             ->getJson("/api/v1/exams/{$exam->id}");
 
         $response->assertStatus(200);
-        // Assert student response does NOT leak correct_answers or explanation
+        $response->assertJsonPath('data.questions.0.id', $question->id);
+        $response->assertJsonMissingPath('data.questions.0.correct_answers');
+        $response->assertJsonMissingPath('data.questions.0.explanation');
         $this->assertNull($response->json('data.questions.0.correct_answers'));
         $this->assertNull($response->json('data.questions.0.explanation'));
 

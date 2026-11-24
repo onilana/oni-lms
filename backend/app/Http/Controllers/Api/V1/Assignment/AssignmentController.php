@@ -19,6 +19,11 @@ class AssignmentController
             ->with(['course.department'])
             ->withCount('submissions');
 
+        $submissionConstraint = fn ($submissions) => $submissions
+            ->where('user_id', $user?->id)
+            ->with('grader');
+        $query->with(['submissions' => $submissionConstraint]);
+
         if ($course) {
             $query->where('course_id', $course->id);
         }
@@ -51,7 +56,12 @@ class AssignmentController
         $data['created_by_id'] = $request->user()->id;
 
         $assignment = Assignment::create($data);
-        $assignment->load('course.department');
+        $assignment->load([
+            'course.department',
+            'submissions' => fn ($submissions) => $submissions
+                ->where('user_id', $request->user()?->id)
+                ->with('grader'),
+        ]);
 
         return response()->json([
             'message' => 'Assignment created successfully.',
@@ -65,7 +75,13 @@ class AssignmentController
             abort(404);
         }
 
-        $assignment->load(['course.department', 'section'])->loadCount('submissions');
+        $assignment->load([
+            'course.department',
+            'section',
+            'submissions' => fn ($submissions) => $submissions
+                ->where('user_id', $request->user()?->id)
+                ->with('grader'),
+        ])->loadCount('submissions');
 
         return response()->json([
             'assignment' => new AssignmentResource($assignment),
@@ -75,7 +91,13 @@ class AssignmentController
     public function update(AssignmentRequest $request, Assignment $assignment): JsonResponse
     {
         $assignment->update($request->validated());
-        $assignment->load(['course.department', 'section'])->loadCount('submissions');
+        $assignment->load([
+            'course.department',
+            'section',
+            'submissions' => fn ($submissions) => $submissions
+                ->where('user_id', $request->user()?->id)
+                ->with('grader'),
+        ])->loadCount('submissions');
 
         return response()->json([
             'message' => 'Assignment updated successfully.',

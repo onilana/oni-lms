@@ -50,15 +50,20 @@ class DashboardController
             ->first();
 
         $studentData = [
+            'user_id' => $targetUser->id,
             'name' => $targetUser->name,
             'email' => $targetUser->email,
             'student_id' => $profile?->student_id_number ?? 'STU-2026-0042',
+            'student_id_number' => $profile?->student_id_number ?? 'STU-2026-0042',
+            'programme_id' => $profile?->programme?->code ?? $profile?->programme_id ?? 'BTECH-CSE',
+            'batch_id' => $profile?->batch?->code ?? $profile?->batch_id ?? 'CSE-2026',
+            'admission_date' => $profile?->admission_date ? (is_string($profile->admission_date) ? substr($profile->admission_date, 0, 10) : $profile->admission_date->toDateString()) : '2026-08-01',
+            'current_semester' => $profile?->current_semester ?? 1,
+            'status' => $profile?->status ?? 'active',
             'department' => $profile?->programme?->department?->name ?? 'Department of Computer Science & Engineering',
             'programme' => $profile?->programme?->name ?? 'Bachelor of Technology in Computer Science',
             'batch' => $profile?->batch?->name ?? 'B.Tech CSE — Class of 2030',
-            'current_semester' => $profile?->current_semester ?? 1,
             'academic_session' => $profile?->batch?->academicSession?->name ?? '2026-2027',
-            'status' => $profile?->status ?? 'active',
         ];
 
         // 2. Enrolled courses with progress & next lesson
@@ -77,19 +82,21 @@ class DashboardController
         $totalLessons = 0;
         $totalCompletedLessons = 0;
 
-        foreach ($enrolledCourses as $course) {
-            $progress = $course->calculateProgressFor($targetUser);
-            $totalLessons += $progress['total_lessons'];
-            $totalCompletedLessons += $progress['completed_lessons'];
+        $completedLessonMap = LessonProgress::where('user_id', $targetUser->id)
+            ->where('is_completed', true)
+            ->pluck('lesson_id')
+            ->flip();
 
-            // Find next uncompleted lesson
-            $nextLesson = $course->lessons
-                ->first(function ($lesson) use ($targetUser) {
-                    return ! LessonProgress::where('lesson_id', $lesson->id)
-                        ->where('user_id', $targetUser->id)
-                        ->where('is_completed', true)
-                        ->exists();
-                });
+        foreach ($enrolledCourses as $course) {
+            $totalCourseLessons = $course->lessons->count();
+            $completedCourseLessons = $course->lessons->filter(fn ($l) => isset($completedLessonMap[$l->id]))->count();
+            $percentage = $totalCourseLessons > 0 ? (int) round(($completedCourseLessons / $totalCourseLessons) * 100) : 0;
+
+            $totalLessons += $totalCourseLessons;
+            $totalCompletedLessons += $completedCourseLessons;
+
+            // Find next uncompleted lesson in memory
+            $nextLesson = $course->lessons->first(fn ($l) => ! isset($completedLessonMap[$l->id]));
 
             $courseCards[] = [
                 'id' => $course->id,
@@ -97,9 +104,9 @@ class DashboardController
                 'title' => $course->title,
                 'credits' => $course->credits,
                 'department_code' => $course->department?->code,
-                'progress_percentage' => $progress['percentage'],
-                'completed_lessons' => $progress['completed_lessons'],
-                'total_lessons' => $progress['total_lessons'],
+                'progress_percentage' => $percentage,
+                'completed_lessons' => $completedCourseLessons,
+                'total_lessons' => $totalCourseLessons,
                 'next_lesson' => $nextLesson ? [
                     'id' => $nextLesson->id,
                     'title' => $nextLesson->title,
@@ -118,13 +125,16 @@ class DashboardController
             ->orderBy('due_date')
             ->get();
 
+        $assignmentSubmissions = AssignmentSubmission::whereIn('assignment_id', $assignments->pluck('id'))
+            ->where('user_id', $targetUser->id)
+            ->get()
+            ->keyBy('assignment_id');
+
         $upcomingDeadlines = [];
         $pendingAssignmentsCount = 0;
 
         foreach ($assignments as $assignment) {
-            $submission = AssignmentSubmission::where('assignment_id', $assignment->id)
-                ->where('user_id', $targetUser->id)
-                ->first();
+            $submission = $assignmentSubmissions->get($assignment->id);
 
             $isSubmitted = $submission !== null;
             if (! $isSubmitted && ! $assignment->isPastDue()) {

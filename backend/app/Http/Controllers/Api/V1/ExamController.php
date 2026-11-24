@@ -26,7 +26,16 @@ class ExamController
             $query->where('is_published', true);
         }
 
-        $exams = $query->with('questions')->get();
+        $exams = $query
+            ->with([
+                'course',
+                'questions',
+                'attempts' => fn ($attempts) => $attempts
+                    ->where('user_id', $user?->id)
+                    ->latest(),
+            ])
+            ->withCount('questions')
+            ->get();
 
         return ExamResource::collection($exams);
     }
@@ -37,7 +46,13 @@ class ExamController
             abort(404);
         }
 
-        $exam->load('questions');
+        $exam->load([
+            'course',
+            'questions',
+            'attempts' => fn ($attempts) => $attempts
+                ->where('user_id', $request->user()?->id)
+                ->latest(),
+        ])->loadCount('questions');
         return new ExamResource($exam);
     }
 
@@ -48,6 +63,7 @@ class ExamController
         $data['created_by'] = $request->user()->id;
 
         $exam = Exam::create($data);
+        $exam->load(['course', 'questions'])->loadCount('questions');
 
         return response()->json([
             'message' => 'Exam created successfully',
@@ -58,10 +74,11 @@ class ExamController
     public function update(ExamRequest $request, Exam $exam): JsonResponse
     {
         $exam->update($request->validated());
+        $exam->load(['course', 'questions'])->loadCount('questions');
 
         return response()->json([
             'message' => 'Exam updated successfully',
-            'data' => new ExamResource($exam->fresh(['questions'])),
+            'data' => new ExamResource($exam),
         ]);
     }
 
@@ -98,7 +115,7 @@ class ExamController
 
         return response()->json([
             'message' => 'Questions attached to exam successfully',
-            'data' => new ExamResource($exam->fresh(['questions'])),
+            'data' => new ExamResource($exam->fresh(['course', 'questions'])->loadCount('questions')),
         ]);
     }
 
