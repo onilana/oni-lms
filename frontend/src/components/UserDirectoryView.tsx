@@ -23,8 +23,13 @@ import { apiRequest } from '../api/client';
 import type { User, Role } from '../types/auth';
 import type { Department, Programme, Batch } from '../types/academic';
 import { useAuth } from '../context/AuthContext';
+import { StudentProfileModal } from './StudentProfileModal';
 
-export const UserDirectoryView: React.FC = () => {
+interface UserDirectoryViewProps {
+  initialSection?: 'admins' | 'teachers' | 'students' | 'all';
+}
+
+export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSection }) => {
   const { user: authUser, hasRole } = useAuth();
   const isSuperAdmin = hasRole('super_admin');
 
@@ -33,6 +38,7 @@ export const UserDirectoryView: React.FC = () => {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [courses, setCourses] = useState<{ id: string; title: string; code: string; department_id?: string }[]>([]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,9 +46,25 @@ export const UserDirectoryView: React.FC = () => {
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'student' | 'teacher' | 'admin'>('all');
+  const [activeSection, setActiveSection] = useState<'admins' | 'teachers' | 'students' | 'all'>(initialSection || 'admins');
+  const [adminSubRole, setAdminSubRole] = useState<'all' | 'super_admin' | 'college_admin' | 'hod'>('all');
+  const [semesterFilter, setSemesterFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
   const [deptFilter, setDeptFilter] = useState('');
+  const [levelFilter, setLevelFilter] = useState('');
+  const [progFilter, setProgFilter] = useState('');
+  const [courseFilter, setCourseFilter] = useState('');
+
+  // Student Profile Dossier Modal
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [selectedStudentUser, setSelectedStudentUser] = useState<User | null>(null);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
+
+  useEffect(() => {
+    if (initialSection) {
+      setActiveSection(initialSection);
+    }
+  }, [initialSection]);
 
   // Modals
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -91,30 +113,50 @@ export const UserDirectoryView: React.FC = () => {
     setError(null);
     try {
       const queryParams = new URLSearchParams();
-      if (roleFilter !== 'all') {
-        if (roleFilter === 'admin') {
-          queryParams.set('role', 'super_admin');
+      if (activeSection === 'admins') {
+        if (adminSubRole === 'all') {
+          queryParams.set('role', 'super_admin,college_admin,dept_admin,hod');
+        } else if (adminSubRole === 'hod') {
+          queryParams.set('role', 'hod,dept_admin');
         } else {
-          queryParams.set('role', roleFilter);
+          queryParams.set('role', adminSubRole);
         }
+      } else if (activeSection === 'teachers') {
+        queryParams.set('role', 'teacher');
+      } else if (activeSection === 'students') {
+        queryParams.set('role', 'student');
+      }
+
+      if (semesterFilter && activeSection === 'students') {
+        queryParams.set('semester', semesterFilter);
+      }
+      if (deptFilter && (activeSection === 'teachers' || activeSection === 'students' || activeSection === 'all')) {
+        queryParams.set('department_id', deptFilter);
+      }
+      if (levelFilter && activeSection === 'students') {
+        queryParams.set('level', levelFilter);
+      }
+      if (progFilter && activeSection === 'students') {
+        queryParams.set('programme_id', progFilter);
+      }
+      if (courseFilter && (activeSection === 'teachers' || activeSection === 'students')) {
+        queryParams.set('course_id', courseFilter);
       }
       if (statusFilter) {
         queryParams.set('status', statusFilter);
-      }
-      if (deptFilter) {
-        queryParams.set('department_id', deptFilter);
       }
       if (searchTerm) {
         queryParams.set('search', searchTerm);
       }
 
       const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
-      const [usersRes, rolesRes, deptRes, progRes, batchRes] = await Promise.all([
+      const [usersRes, rolesRes, deptRes, progRes, batchRes, coursesRes] = await Promise.all([
         apiRequest<{ data: User[] }>(`/users${queryString}`),
         apiRequest<{ roles: Role[] }>('/roles').catch(() => ({ roles: [] })),
         apiRequest<{ departments: Department[] }>('/academic/departments').catch(() => ({ departments: [] })),
         apiRequest<{ programmes: Programme[] }>('/academic/programmes').catch(() => ({ programmes: [] })),
         apiRequest<{ batches: Batch[] }>('/academic/batches').catch(() => ({ batches: [] })),
+        apiRequest<{ courses: any[] }>('/courses').catch(() => ({ courses: [] })),
       ]);
 
       setUsers(usersRes.data);
@@ -122,6 +164,7 @@ export const UserDirectoryView: React.FC = () => {
       if (deptRes.departments.length > 0) setDepartments(deptRes.departments);
       if (progRes.programmes.length > 0) setProgrammes(progRes.programmes);
       if (batchRes.batches.length > 0) setBatches(batchRes.batches);
+      if (coursesRes.courses && coursesRes.courses.length > 0) setCourses(coursesRes.courses);
     } catch (err: any) {
       setError(err.message || 'Failed to load user directory.');
     } finally {
@@ -131,7 +174,7 @@ export const UserDirectoryView: React.FC = () => {
 
   useEffect(() => {
     fetchUsers();
-  }, [roleFilter, statusFilter, deptFilter]);
+  }, [activeSection, adminSubRole, semesterFilter, statusFilter, deptFilter, levelFilter, progFilter, courseFilter]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -376,7 +419,48 @@ export const UserDirectoryView: React.FC = () => {
 
       {error && <div className="alert alert-error">{error}</div>}
 
-      {/* Directory Toolbar */}
+      {/* Primary Section Switcher */}
+      <div className="tabs-bar" style={{ marginBottom: '1rem' }}>
+        <button
+          className={`tab-btn ${activeSection === 'admins' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveSection('admins');
+            setSemesterFilter('');
+          }}
+        >
+          <Shield size={16} />
+          <span>Leadership &amp; Admins (Super Admin, School Admin, HoD)</span>
+        </button>
+        <button
+          className={`tab-btn ${activeSection === 'teachers' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveSection('teachers');
+            setSemesterFilter('');
+          }}
+        >
+          <UserCheck size={16} />
+          <span>Teachers &amp; Faculty</span>
+        </button>
+        <button
+          className={`tab-btn ${activeSection === 'students' ? 'active' : ''}`}
+          onClick={() => setActiveSection('students')}
+        >
+          <GraduationCap size={16} />
+          <span>Enrolled Students</span>
+        </button>
+        <button
+          className={`tab-btn ${activeSection === 'all' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveSection('all');
+            setSemesterFilter('');
+          }}
+        >
+          <Users size={16} />
+          <span>All Campus Directory</span>
+        </button>
+      </div>
+
+      {/* Directory Toolbar with Contextual Filters */}
       <div className="courses-toolbar" style={{ marginBottom: '1.25rem' }}>
         <form onSubmit={handleSearchSubmit} className="search-wrap" style={{ flex: 1 }}>
           <Search size={16} className="search-icon" />
@@ -388,13 +472,96 @@ export const UserDirectoryView: React.FC = () => {
           />
         </form>
 
-        <div className="filter-group">
-          <select value={deptFilter} onChange={(e) => setDeptFilter(e.target.value)}>
-            <option value="">All Departments</option>
-            {departments.map((d) => (
-              <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-            ))}
-          </select>
+        <div className="filter-group" style={{ flexWrap: 'wrap', gap: '8px' }}>
+          {/* Admin Sub-Role Filters */}
+          {activeSection === 'admins' && (
+            <div className="view-toggle">
+              <button
+                className={`toggle-btn ${adminSubRole === 'all' ? 'active' : ''}`}
+                onClick={() => setAdminSubRole('all')}
+              >
+                All Leadership
+              </button>
+              <button
+                className={`toggle-btn ${adminSubRole === 'super_admin' ? 'active' : ''}`}
+                onClick={() => setAdminSubRole('super_admin')}
+              >
+                Super Admin
+              </button>
+              <button
+                className={`toggle-btn ${adminSubRole === 'college_admin' ? 'active' : ''}`}
+                onClick={() => setAdminSubRole('college_admin')}
+              >
+                School / College Admin
+              </button>
+              <button
+                className={`toggle-btn ${adminSubRole === 'hod' ? 'active' : ''}`}
+                onClick={() => setAdminSubRole('hod')}
+              >
+                Head of Department (HoD)
+              </button>
+            </div>
+          )}
+
+          {/* Department Filter (Teachers, Students, All) */}
+          {(activeSection === 'teachers' || activeSection === 'students' || activeSection === 'all') && (
+            <select value={deptFilter} onChange={(e) => { setDeptFilter(e.target.value); setProgFilter(''); }}>
+              <option value="">All Departments</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+              ))}
+            </select>
+          )}
+
+          {/* Level Filter (Students) */}
+          {activeSection === 'students' && (
+            <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
+              <option value="">All Degree Levels</option>
+              <option value="ug">Undergraduate (UG)</option>
+              <option value="pg">Postgraduate (PG)</option>
+              <option value="phd">Doctoral / Ph.D.</option>
+              <option value="diploma">Diploma / Associate</option>
+            </select>
+          )}
+
+          {/* Programme Filter (Students) */}
+          {activeSection === 'students' && (
+            <select value={progFilter} onChange={(e) => setProgFilter(e.target.value)}>
+              <option value="">All Degree Programmes</option>
+              {programmes
+                .filter((p) => !deptFilter || p.department_id === deptFilter)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                ))}
+            </select>
+          )}
+
+          {/* Active Course Filter (Teachers) */}
+          {activeSection === 'teachers' && (
+            <select value={courseFilter} onChange={(e) => setCourseFilter(e.target.value)}>
+              <option value="">All Active Courses</option>
+              {courses
+                .filter((c) => !deptFilter || c.department_id === deptFilter)
+                .map((c) => (
+                  <option key={c.id} value={c.id}>{c.code} - {c.title}</option>
+                ))}
+            </select>
+          )}
+
+          {/* Semester Filter (Students) */}
+          {activeSection === 'students' && (
+            <select value={semesterFilter} onChange={(e) => setSemesterFilter(e.target.value)}>
+              <option value="">All Semesters</option>
+              <option value="1">Semester 1</option>
+              <option value="2">Semester 2</option>
+              <option value="3">Semester 3</option>
+              <option value="4">Semester 4</option>
+              <option value="5">Semester 5</option>
+              <option value="6">Semester 6</option>
+              <option value="7">Semester 7</option>
+              <option value="8">Semester 8</option>
+            </select>
+          )}
 
           <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
             <option value="">All Statuses</option>
@@ -402,33 +569,6 @@ export const UserDirectoryView: React.FC = () => {
             <option value="inactive">Inactive</option>
             <option value="suspended">Suspended</option>
           </select>
-
-          <div className="view-toggle">
-            <button
-              className={`toggle-btn ${roleFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setRoleFilter('all')}
-            >
-              All ({users.length})
-            </button>
-            <button
-              className={`toggle-btn ${roleFilter === 'student' ? 'active' : ''}`}
-              onClick={() => setRoleFilter('student')}
-            >
-              Students
-            </button>
-            <button
-              className={`toggle-btn ${roleFilter === 'teacher' ? 'active' : ''}`}
-              onClick={() => setRoleFilter('teacher')}
-            >
-              Faculty
-            </button>
-            <button
-              className={`toggle-btn ${roleFilter === 'admin' ? 'active' : ''}`}
-              onClick={() => setRoleFilter('admin')}
-            >
-              Admins
-            </button>
-          </div>
         </div>
       </div>
 
@@ -483,7 +623,21 @@ export const UserDirectoryView: React.FC = () => {
                           {getInitials(u.name)}
                         </div>
                         <div>
-                          <strong>{u.name}</strong>
+                          {isStudent ? (
+                            <strong
+                              style={{ cursor: 'pointer', color: '#1d4ed8', textDecoration: 'underline' }}
+                              onClick={() => {
+                                setSelectedStudentId(u.id);
+                                setSelectedStudentUser(u);
+                                setIsStudentModalOpen(true);
+                              }}
+                              title="Click to view complete student profile dossier"
+                            >
+                              {u.name}
+                            </strong>
+                          ) : (
+                            <strong>{u.name}</strong>
+                          )}
                           <small style={{ display: 'block', color: '#64748b' }}>{u.email}</small>
                         </div>
                       </div>
@@ -517,7 +671,24 @@ export const UserDirectoryView: React.FC = () => {
 
                     <td>
                       {isStudent && u.student_profile?.student_id_number ? (
-                        <code>{u.student_profile.student_id_number}</code>
+                        <code
+                          style={{
+                            cursor: 'pointer',
+                            background: '#dbeafe',
+                            color: '#1e40af',
+                            padding: '3px 8px',
+                            borderRadius: '4px',
+                            fontWeight: 600,
+                          }}
+                          onClick={() => {
+                            setSelectedStudentId(u.id);
+                            setSelectedStudentUser(u);
+                            setIsStudentModalOpen(true);
+                          }}
+                          title="Click to view complete student profile dossier"
+                        >
+                          {u.student_profile.student_id_number}
+                        </code>
                       ) : isFaculty && u.teacher_profile?.employee_id_number ? (
                         <code>{u.teacher_profile.employee_id_number}</code>
                       ) : (
@@ -541,6 +712,20 @@ export const UserDirectoryView: React.FC = () => {
 
                     <td>
                       <div style={{ display: 'flex', gap: '6px' }}>
+                        {isStudent && (
+                          <button
+                            type="button"
+                            className="btn btn-primary btn-sm"
+                            title="View Complete Student Profile Dossier"
+                            onClick={() => {
+                              setSelectedStudentId(u.id);
+                              setSelectedStudentUser(u);
+                              setIsStudentModalOpen(true);
+                            }}
+                          >
+                            <GraduationCap size={13} /> Dossier
+                          </button>
+                        )}
                         <button
                           type="button"
                           className="btn btn-outline btn-sm"
@@ -1029,6 +1214,18 @@ export const UserDirectoryView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* STUDENT PROFILE DOSSIER MODAL */}
+      <StudentProfileModal
+        userId={selectedStudentId}
+        isOpen={isStudentModalOpen}
+        onClose={() => {
+          setIsStudentModalOpen(false);
+          setSelectedStudentId(null);
+          setSelectedStudentUser(null);
+        }}
+        initialData={selectedStudentUser}
+      />
     </div>
   );
 };

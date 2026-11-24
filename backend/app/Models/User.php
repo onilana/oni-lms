@@ -86,6 +86,20 @@ class User extends Authenticatable
         return $this->hasRole(Role::SUPER_ADMIN);
     }
 
+    public function isInstitutionAdmin(): bool
+    {
+        return $this->hasRole([Role::SUPER_ADMIN, Role::COLLEGE_ADMIN]);
+    }
+
+    public function getAssignedDepartmentId(): ?string
+    {
+        if ($this->teacherProfile && $this->teacherProfile->department_id) {
+            return $this->teacherProfile->department_id;
+        }
+
+        return Department::where('head_of_department_id', $this->id)->value('id');
+    }
+
     public function hasRole(string|array $roles): bool
     {
         $roleList = is_array($roles) ? $roles : func_get_args();

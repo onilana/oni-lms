@@ -51,6 +51,7 @@ function MainApp() {
   const [health, setHealth] = useState<HealthStatus | null>(null);
   const [healthError, setHealthError] = useState('');
   const [isLoginOpen, setIsLoginOpen] = useState(false);
+  const [userDirectorySection, setUserDirectorySection] = useState<'admins' | 'teachers' | 'students' | 'all'>('admins');
 
   useEffect(() => {
     if (user) {
@@ -94,11 +95,11 @@ function MainApp() {
   const isDeptAdminPortal = dashboardRoleMode === 'department';
   const isInstitutionalAdminPortal = dashboardRoleMode === 'admin';
 
-  // Administration items visibility (Removed from Teacher and Student dashboards)
+  // Administration items visibility (Database & Backups strictly restricted to Super Admin, removed from Department/HOD, Teacher, and Student)
   const canViewAdminSection = !isTeacherPortal && !isStudentPortal && isAdmin;
   const canViewUserDirectory = canViewAdminSection;
   const canViewAuditLogs = canViewAdminSection && (isSuperAdmin || hasRole('college_admin'));
-  const canViewBackups = canViewAdminSection && isSuperAdmin;
+  const canViewBackups = canViewAdminSection && isSuperAdmin && !isDeptAdminPortal;
 
   // Certificate: Available to Students (view/claim) and Admins (issue/verify), but explicitly removed from Teacher dashboard
   const canViewCertificates = !isTeacherPortal;
@@ -111,10 +112,12 @@ function MainApp() {
       setCurrentView('dashboard');
     } else if (isStudentPortal && ['academic', 'users', 'audit_logs', 'backups', 'wordpress'].includes(currentView)) {
       setCurrentView('dashboard');
+    } else if (isDeptAdminPortal && ['backups', 'wordpress'].includes(currentView)) {
+      setCurrentView('dashboard');
     } else if (!isSuperAdmin && currentView === 'wordpress') {
       setCurrentView('dashboard');
     }
-  }, [dashboardRoleMode, currentView, isTeacherPortal, isStudentPortal, isSuperAdmin]);
+  }, [dashboardRoleMode, currentView, isTeacherPortal, isStudentPortal, isDeptAdminPortal, isSuperAdmin]);
 
   return (
     <div className="app-shell">
@@ -364,7 +367,7 @@ function MainApp() {
         ) : (
           <>
             {currentView === 'academic' && <AcademicView />}
-            {currentView === 'users' && <UserDirectoryView />}
+            {currentView === 'users' && <UserDirectoryView initialSection={userDirectorySection} />}
             {currentView === 'audit_logs' && <AuditLogsView currentUser={user} />}
             {currentView === 'backups' && <BackupManagementView currentUser={user} />}
             {currentView === 'courses' && (
@@ -424,18 +427,22 @@ function MainApp() {
                       >
                         <BookOpen size={14} /> Faculty / Teacher
                       </button>
-                      <button
-                        className={`btn btn-sm ${dashboardRoleMode === 'department' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => setDashboardRoleMode('department')}
-                      >
-                        <Building2 size={14} /> Department / HOD
-                      </button>
-                      <button
-                        className={`btn btn-sm ${dashboardRoleMode === 'admin' ? 'btn-primary' : 'btn-secondary'}`}
-                        onClick={() => setDashboardRoleMode('admin')}
-                      >
-                        <ShieldCheck size={14} /> Institutional Admin
-                      </button>
+                      {(isSuperAdmin || hasRole(['college_admin', 'dept_admin', 'hod'])) && (
+                        <button
+                          className={`btn btn-sm ${dashboardRoleMode === 'department' ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => setDashboardRoleMode('department')}
+                        >
+                          <Building2 size={14} /> Department / HOD
+                        </button>
+                      )}
+                      {(isSuperAdmin || hasRole('college_admin')) && (
+                        <button
+                          className={`btn btn-sm ${dashboardRoleMode === 'admin' ? 'btn-primary' : 'btn-secondary'}`}
+                          onClick={() => setDashboardRoleMode('admin')}
+                        >
+                          <ShieldCheck size={14} /> Institutional Admin
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -443,7 +450,10 @@ function MainApp() {
                 {dashboardRoleMode === 'admin' && (
                   <AdminDashboardView
                     currentUser={user}
-                    onNavigateTo={(view) => {
+                    onNavigateTo={(view, options) => {
+                      if (options?.section) {
+                        setUserDirectorySection(options.section);
+                      }
                       setCurrentView(view);
                       setLearningCourseId(null);
                     }}
@@ -453,7 +463,10 @@ function MainApp() {
                 {dashboardRoleMode === 'department' && (
                   <DepartmentDashboardView
                     currentUser={user}
-                    onNavigateTo={(view) => {
+                    onNavigateTo={(view, options) => {
+                      if (options?.section) {
+                        setUserDirectorySection(options.section);
+                      }
                       setCurrentView(view);
                       setLearningCourseId(null);
                     }}

@@ -166,8 +166,8 @@ class RoleAndPermissionSeeder extends Seeder
             collect($permissionModels)->pluck('id')
         );
 
-        // 4. Default Super Admin User
-        $superAdmin = User::updateOrCreate(
+        // 4. Default Super Admin User (firstOrCreate preserves any changed password or custom profile)
+        $superAdmin = User::firstOrCreate(
             ['email' => 'admin@onilms.edu'],
             [
                 'name' => 'Super Administrator',
@@ -182,7 +182,7 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // 5. Default Demo Student User
-        $demoStudent = User::updateOrCreate(
+        $demoStudent = User::firstOrCreate(
             ['email' => 'student@onilms.edu'],
             [
                 'name' => 'Aarav Sharma',
@@ -197,7 +197,7 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // 6. Default Demo Teacher User
-        $demoTeacher = User::updateOrCreate(
+        $demoTeacher = User::firstOrCreate(
             ['email' => 'teacher@onilms.edu'],
             [
                 'name' => 'Dr. Priya Ramanathan',
@@ -212,11 +212,11 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         // 7. Default Demo HOD / Department Admin User
-        $demoHod = User::updateOrCreate(
+        $demoHod = User::firstOrCreate(
             ['email' => 'hod@onilms.edu'],
             [
                 'name' => 'Prof. Vikram Sengupta',
-                'password' => Hash::make(env('INITIAL_HOD_PASSWORD', 'OniHod@2026!')),
+                'password' => Hash::make(env('INITIAL_HOD_PASSWORD', 'OniAdmin@2026!')),
                 'status' => 'active',
                 'email_verified_at' => now(),
             ]

@@ -19,7 +19,10 @@ import type { User } from '../types/auth';
 
 interface DepartmentDashboardViewProps {
   currentUser: User | null;
-  onNavigateTo: (view: 'academic' | 'courses' | 'users' | 'analytics' | 'attendance') => void;
+  onNavigateTo: (
+    view: 'academic' | 'courses' | 'users' | 'analytics' | 'attendance',
+    options?: { section?: 'admins' | 'teachers' | 'students' | 'all' }
+  ) => void;
 }
 
 export const DepartmentDashboardView: React.FC<DepartmentDashboardViewProps> = ({
@@ -98,65 +101,113 @@ export const DepartmentDashboardView: React.FC<DepartmentDashboardViewProps> = (
         </div>
       </div>
 
-      {/* Department Metrics Grid */}
+      {/* Department Metrics Grid (Clickable to filtered views) */}
       <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(190px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('academic')}
+          title="Click to view department programmes and curricula"
+        >
           <div className="stat-icon" style={{ background: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' }}>
             <Layers size={22} />
           </div>
           <div className="stat-info">
             <span className="stat-label">Active Programmes</span>
             <strong className="stat-value">{metrics.programmes_count}</strong>
+            <small style={{ color: '#14b8a6', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              Degree Programs &rarr;
+            </small>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('users', { section: 'teachers' })}
+          title="Click to view department faculty instructors"
+        >
           <div className="stat-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
             <UserCheck size={22} />
           </div>
           <div className="stat-info">
             <span className="stat-label">Faculty Strength</span>
             <strong className="stat-value">{metrics.faculty_count}</strong>
+            <small style={{ color: '#3b82f6', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              Faculty Members &rarr;
+            </small>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('users', { section: 'students' })}
+          title="Click to view all enrolled students in department programmes"
+        >
           <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
             <Users size={22} />
           </div>
           <div className="stat-info">
             <span className="stat-label">Enrolled Students</span>
             <strong className="stat-value">{metrics.enrolled_students_count}</strong>
+            <small style={{ color: '#10b981', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              Student Roster &rarr;
+            </small>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('courses')}
+          title="Click to view department course offerings"
+        >
           <div className="stat-icon" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' }}>
             <BookOpen size={22} />
           </div>
           <div className="stat-info">
             <span className="stat-label">Courses Offered</span>
             <strong className="stat-value">{metrics.courses_offered_count}</strong>
+            <small style={{ color: '#a855f7', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              Course Offerings &rarr;
+            </small>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('attendance')}
+          title="Click to review department attendance breakdown"
+        >
           <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
             <CalendarCheck size={22} />
           </div>
           <div className="stat-info">
             <span className="stat-label">Avg Attendance</span>
             <strong className="stat-value">{metrics.average_attendance_percentage}%</strong>
+            <small style={{ color: '#f59e0b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              Attendance Logs &rarr;
+            </small>
           </div>
         </div>
 
-        <div className="stat-card">
+        <div
+          className="stat-card"
+          style={{ cursor: 'pointer' }}
+          onClick={() => onNavigateTo('analytics')}
+          title="Click to view academic pass rates and grading performance"
+        >
           <div className="stat-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
             <GraduationCap size={22} />
           </div>
           <div className="stat-info">
             <span className="stat-label">Exam Pass Rate</span>
             <strong className="stat-value">{metrics.average_pass_rate_percentage}%</strong>
+            <small style={{ color: '#6366f1', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+              Academic Reports &rarr;
+            </small>
           </div>
         </div>
       </div>

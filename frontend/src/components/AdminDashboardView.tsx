@@ -26,7 +26,10 @@ import type { User } from '../types/auth';
 
 interface AdminDashboardViewProps {
   currentUser: User | null;
-  onNavigateTo: (view: 'academic' | 'courses' | 'users' | 'analytics' | 'audit_logs' | 'backups' | 'wordpress' | 'certificates') => void;
+  onNavigateTo: (
+    view: 'academic' | 'courses' | 'users' | 'analytics' | 'audit_logs' | 'backups' | 'wordpress' | 'certificates' | 'attendance',
+    options?: { section?: 'admins' | 'teachers' | 'students' | 'all' }
+  ) => void;
 }
 
 type WidgetId = 'metrics' | 'health' | 'audit' | 'roles' | 'backup' | 'tools';
@@ -164,63 +167,111 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
       case 'metrics':
         return (
           <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px' }}>
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}
+              onClick={() => onNavigateTo('users', { section: 'students' })}
+              title="Click to view all enrolled students with level, programme & department filters"
+            >
               <div className="stat-icon" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
                 <Users size={22} />
               </div>
               <div className="stat-info">
                 <span className="stat-label">Total Students</span>
                 <strong className="stat-value">{metrics.total_students}</strong>
+                <small style={{ color: '#3b82f6', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  Filter &amp; Roster &rarr;
+                </small>
               </div>
             </div>
 
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}
+              onClick={() => onNavigateTo('users', { section: 'teachers' })}
+              title="Click to view all faculty & staff members with department and course filters"
+            >
               <div className="stat-icon" style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981' }}>
                 <Server size={22} />
               </div>
               <div className="stat-info">
                 <span className="stat-label">Faculty &amp; Staff</span>
                 <strong className="stat-value">{metrics.total_faculty}</strong>
+                <small style={{ color: '#10b981', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  Faculty Directory &rarr;
+                </small>
               </div>
             </div>
 
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}
+              onClick={() => onNavigateTo('academic')}
+              title="Click to manage academic departments and degree programmes"
+            >
               <div className="stat-icon" style={{ background: 'rgba(20, 184, 166, 0.1)', color: '#14b8a6' }}>
                 <Building2 size={22} />
               </div>
               <div className="stat-info">
                 <span className="stat-label">Departments</span>
                 <strong className="stat-value">{metrics.total_departments}</strong>
+                <small style={{ color: '#14b8a6', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  Academic Setup &rarr;
+                </small>
               </div>
             </div>
 
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}
+              onClick={() => onNavigateTo('courses')}
+              title="Click to view all active courses and curricula"
+            >
               <div className="stat-icon" style={{ background: 'rgba(168, 85, 247, 0.1)', color: '#a855f7' }}>
                 <BookOpen size={22} />
               </div>
               <div className="stat-info">
                 <span className="stat-label">Active Courses</span>
                 <strong className="stat-value">{metrics.total_courses}</strong>
+                <small style={{ color: '#a855f7', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  Course Curricula &rarr;
+                </small>
               </div>
             </div>
 
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}
+              onClick={() => onNavigateTo('certificates')}
+              title="Click to view and issue graduation certificates"
+            >
               <div className="stat-icon" style={{ background: 'rgba(245, 158, 11, 0.1)', color: '#f59e0b' }}>
                 <Award size={22} />
               </div>
               <div className="stat-info">
                 <span className="stat-label">Certificates Issued</span>
                 <strong className="stat-value">{metrics.certificates_issued}</strong>
+                <small style={{ color: '#f59e0b', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  Credential Registry &rarr;
+                </small>
               </div>
             </div>
 
-            <div className="stat-card">
+            <div
+              className="stat-card"
+              style={{ cursor: 'pointer', transition: 'transform 0.15s ease, box-shadow 0.15s ease' }}
+              onClick={() => onNavigateTo('attendance')}
+              title="Click to view institution-wide attendance records"
+            >
               <div className="stat-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1' }}>
                 <CalendarCheck size={22} />
               </div>
               <div className="stat-info">
                 <span className="stat-label">Attendance Rate</span>
                 <strong className="stat-value">{metrics.overall_attendance_rate}%</strong>
+                <small style={{ color: '#6366f1', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '2px' }}>
+                  Session Logs &rarr;
+                </small>
               </div>
             </div>
           </div>
@@ -443,9 +494,9 @@ export const AdminDashboardView: React.FC<AdminDashboardViewProps> = ({
         </div>
       </div>
 
-      {/* Draggable Dashboard Grid */}
+      {/* Draggable Dashboard Grid (Database & Backups restricted strictly to Super Admin) */}
       <div className="admin-draggable-grid">
-        {widgetOrder.map((id) => (
+        {widgetOrder.filter((id) => isSuperAdmin || id !== 'backup').map((id) => (
           <div
             key={id}
             className={`admin-widget-card widget-${id} ${draggedWidget === id ? 'is-dragging' : ''} ${dragOverWidget === id ? 'drag-over' : ''}`}

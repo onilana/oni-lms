@@ -53,6 +53,7 @@ class DashboardController
             'user_id' => $targetUser->id,
             'name' => $targetUser->name,
             'email' => $targetUser->email,
+            'phone' => $profile?->phone ?? $targetUser->phone ?? '',
             'student_id' => $profile?->student_id_number ?? 'STU-2026-0042',
             'student_id_number' => $profile?->student_id_number ?? 'STU-2026-0042',
             'programme_id' => $profile?->programme?->code ?? $profile?->programme_id ?? 'BTECH-CSE',
@@ -64,6 +65,12 @@ class DashboardController
             'programme' => $profile?->programme?->name ?? 'Bachelor of Technology in Computer Science',
             'batch' => $profile?->batch?->name ?? 'B.Tech CSE — Class of 2030',
             'academic_session' => $profile?->batch?->academicSession?->name ?? '2026-2027',
+            'date_of_birth' => $profile?->date_of_birth ? (is_string($profile->date_of_birth) ? substr($profile->date_of_birth, 0, 10) : $profile->date_of_birth->toDateString()) : '',
+            'gender' => $profile?->gender ?? '',
+            'class_roll_no' => $profile?->class_roll_no ?? '',
+            'father_name' => $profile?->father_name ?? '',
+            'mother_name' => $profile?->mother_name ?? '',
+            'address' => $profile?->address ?? '',
         ];
 
         // 2. Enrolled courses with progress & next lesson
@@ -388,11 +395,16 @@ class DashboardController
     {
         $user = $request->user();
 
-        // Determine department
+        // Determine department with strict isolation for HoD & Teachers
         $deptId = $request->query('department_id');
         $department = null;
 
-        if ($deptId) {
+        if ($user && !$user->isInstitutionAdmin()) {
+            $assignedDeptId = $user->getAssignedDepartmentId();
+            if ($assignedDeptId) {
+                $department = Department::find($assignedDeptId);
+            }
+        } elseif ($deptId) {
             $department = Department::find($deptId);
         }
 
@@ -575,6 +587,65 @@ class DashboardController
             'roles_distribution' => $rolesDistribution,
             'recent_audit_logs' => $recentAuditLogs,
             'latest_backup' => $latestBackup,
+        ]);
+    }
+
+    /**
+     * Student Profile Update
+     */
+    public function updateStudentProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated');
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'date_of_birth' => 'nullable|date',
+            'gender' => 'nullable|string|max:50',
+            'class_roll_no' => 'nullable|string|max:100',
+            'phone' => 'nullable|string|max:50',
+            'father_name' => 'nullable|string|max:255',
+            'mother_name' => 'nullable|string|max:255',
+            'address' => 'nullable|string|max:1000',
+        ]);
+
+        if (isset($validated['name'])) {
+            $user->update(['name' => $validated['name']]);
+        }
+
+        $profile = StudentProfile::firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'student_id_number' => 'STU-' . date('Y') . '-' . strtoupper(\Illuminate\Support\Str::random(5)),
+                'status' => 'active',
+            ]
+        );
+
+        $profileUpdates = [];
+        foreach (['date_of_birth', 'gender', 'class_roll_no', 'phone', 'father_name', 'mother_name', 'address'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $profileUpdates[$field] = $validated[$field];
+            }
+        }
+        if (!empty($profileUpdates)) {
+            $profile->update($profileUpdates);
+        }
+
+        return response()->json([
+            'message' => 'Profile details updated successfully.',
+            'student' => [
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $profile->phone ?? $user->phone,
+                'date_of_birth' => $profile->date_of_birth ? (is_string($profile->date_of_birth) ? substr($profile->date_of_birth, 0, 10) : $profile->date_of_birth->toDateString()) : '',
+                'gender' => $profile->gender,
+                'class_roll_no' => $profile->class_roll_no,
+                'father_name' => $profile->father_name,
+                'mother_name' => $profile->mother_name,
+                'address' => $profile->address,
+            ],
         ]);
     }
 }

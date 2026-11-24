@@ -24,8 +24,8 @@ class BackupController
     private function authorizeAdmin(Request $request): void
     {
         $user = $request->user();
-        if (!$user || !$user->hasRole([Role::SUPER_ADMIN, Role::COLLEGE_ADMIN])) {
-            abort(403, 'Unauthorized. Backup operations require administrative privileges.');
+        if (!$user || !$user->isSuperAdmin()) {
+            abort(403, 'Unauthorized. Backup operations require Super Administrator privileges.');
         }
     }
 

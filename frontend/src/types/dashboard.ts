@@ -2,6 +2,7 @@ export interface StudentProfileInfo {
   user_id: string;
   name: string;
   email: string;
+  phone?: string;
   student_id: string;
   student_id_number: string;
   programme_id: string;
@@ -13,6 +14,12 @@ export interface StudentProfileInfo {
   programme: string;
   batch: string;
   academic_session: string;
+  date_of_birth?: string;
+  gender?: string;
+  class_roll_no?: string;
+  father_name?: string;
+  mother_name?: string;
+  address?: string;
 }
 
 export interface StudentMetrics {

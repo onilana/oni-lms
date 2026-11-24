@@ -20,6 +20,7 @@ import {
 import { apiRequest } from '../api/client';
 import type { TeacherDashboardData } from '../types/dashboard';
 import type { User } from '../types/auth';
+import { StudentProfileModal } from './StudentProfileModal';
 
 interface TeacherDashboardViewProps {
   currentUser: User | null;
@@ -35,6 +36,8 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   const [data, setData] = useState<TeacherDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
 
   useEffect(() => {
     loadDashboard();
@@ -240,7 +243,29 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
                           <strong>{item.assignment_title}</strong>
                         </div>
                         <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                          Submitted by <strong>{item.student_name}</strong> ({item.student_id}) · Max: {item.max_score} pts
+                          Submitted by{' '}
+                          <strong
+                            style={{ cursor: 'pointer', color: '#1d4ed8', textDecoration: 'underline' }}
+                            onClick={() => {
+                              setSelectedStudentId(item.student_id);
+                              setIsStudentModalOpen(true);
+                            }}
+                            title="Click to view student profile"
+                          >
+                            {item.student_name}
+                          </strong>{' '}
+                          (
+                          <code
+                            style={{ cursor: 'pointer', background: '#dbeafe', color: '#1e40af', padding: '1px 5px', borderRadius: '4px' }}
+                            onClick={() => {
+                              setSelectedStudentId(item.student_id);
+                              setIsStudentModalOpen(true);
+                            }}
+                            title="Click to view student profile"
+                          >
+                            {item.student_id}
+                          </code>
+                          ) · Max: {item.max_score} pts
                         </div>
                       </div>
                       <button className="btn btn-primary btn-sm" onClick={() => onNavigateTo('assignments')}>
@@ -314,6 +339,16 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* STUDENT PROFILE DOSSIER MODAL */}
+      <StudentProfileModal
+        userId={selectedStudentId}
+        isOpen={isStudentModalOpen}
+        onClose={() => {
+          setIsStudentModalOpen(false);
+          setSelectedStudentId(null);
+        }}
+      />
     </div>
   );
 };

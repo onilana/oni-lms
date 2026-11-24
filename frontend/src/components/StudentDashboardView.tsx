@@ -8,6 +8,7 @@ import {
   CheckCircle,
   ClipboardList,
   Clock,
+  Edit2,
   ExternalLink,
   FileCheck,
   FileQuestion,
@@ -18,7 +19,8 @@ import {
   Sparkles,
   TrendingUp,
   UserCheck,
-  Video
+  Video,
+  X
 } from 'lucide-react';
 import { apiRequest } from '../api/client';
 import type { StudentDashboardData } from '../types/dashboard';
@@ -40,6 +42,20 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Student Profile Edit State
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [profileName, setProfileName] = useState('');
+  const [profileDob, setProfileDob] = useState('');
+  const [profileGender, setProfileGender] = useState('');
+  const [profileRollNo, setProfileRollNo] = useState('');
+  const [profilePhone, setProfilePhone] = useState('');
+  const [profileFatherName, setProfileFatherName] = useState('');
+  const [profileMotherName, setProfileMotherName] = useState('');
+  const [profileAddress, setProfileAddress] = useState('');
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileSuccess, setProfileSuccess] = useState<string | null>(null);
+
   useEffect(() => {
     loadDashboard();
   }, [user]);
@@ -58,6 +74,51 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
       setError(err.message || 'Could not load student dashboard');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openEditProfile = () => {
+    if (!data?.student) return;
+    setProfileName(data.student.name || '');
+    setProfileDob(data.student.date_of_birth ? data.student.date_of_birth.substring(0, 10) : '');
+    setProfileGender(data.student.gender || '');
+    setProfileRollNo(data.student.class_roll_no || '');
+    setProfilePhone(data.student.phone || '');
+    setProfileFatherName(data.student.father_name || '');
+    setProfileMotherName(data.student.mother_name || '');
+    setProfileAddress(data.student.address || '');
+    setProfileError(null);
+    setProfileSuccess(null);
+    setIsProfileModalOpen(true);
+  };
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSavingProfile(true);
+    setProfileError(null);
+    try {
+      await apiRequest('/student/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: profileName,
+          date_of_birth: profileDob || null,
+          gender: profileGender || null,
+          class_roll_no: profileRollNo || null,
+          phone: profilePhone || null,
+          father_name: profileFatherName || null,
+          mother_name: profileMotherName || null,
+          address: profileAddress || null,
+        }),
+      });
+      setProfileSuccess('Profile details successfully saved for certification and institutional records!');
+      setTimeout(() => {
+        setIsProfileModalOpen(false);
+        loadDashboard();
+      }, 1000);
+    } catch (err: any) {
+      setProfileError(err.message || 'Failed to update student profile');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -139,54 +200,124 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
         </button>
       </section>
 
-      {/* Official Student Academic Details Card */}
+      {/* Official Student Academic Details & Profile Card */}
       <section className="panel" style={{ marginBottom: '24px' }}>
-        <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <div className="panel-heading" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
           <div>
-            <h3 style={{ margin: 0, fontSize: '17px' }}>Academic Profile Details</h3>
-            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Enrolled institutional record and cohort mapping</p>
+            <h3 style={{ margin: 0, fontSize: '17px' }}>Student Profile & Official Record</h3>
+            <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-muted)' }}>Institutional profile details used for communication, certification, and academic documentation</p>
           </div>
-          <span className={`badge ${student.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ textTransform: 'uppercase' }}>
-            {student.status}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <button className="btn btn-primary btn-sm" onClick={openEditProfile} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Edit2 size={13} /> Edit / Fill Profile Details
+            </button>
+            <span className={`badge ${student.status === 'active' ? 'badge-success' : 'badge-neutral'}`} style={{ textTransform: 'uppercase' }}>
+              {student.status}
+            </span>
+          </div>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '14px', marginTop: '16px' }}>
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>student_id_number</span>
-            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px', color: '#173f73' }}>{student.student_id_number || student.student_id}</strong>
+        {/* 9 Personal & Official Profile Details */}
+        <div style={{ marginTop: '16px' }}>
+          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: '12px' }}>
+            Personal Details (Communication & Certification)
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '12px' }}>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>1. Full Name</span>
+              <strong style={{ display: 'block', fontSize: '15px', marginTop: '2px', color: 'var(--text-primary)' }}>{student.name}</strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>2. Date of Birth</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: student.date_of_birth ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {student.date_of_birth ? new Date(student.date_of_birth).toLocaleDateString() : 'Not Provided'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>3. Gender</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', textTransform: 'capitalize', color: student.gender ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {student.gender || 'Not Provided'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>4. Class Roll No.</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: student.class_roll_no ? '#173f73' : 'var(--text-muted)' }}>
+                {student.class_roll_no || 'Not Set'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>5. Phone No.</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: student.phone ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {student.phone || 'Not Provided'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>6. Enrolled Email</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', wordBreak: 'break-all' }}>{student.email}</strong>
+              <small style={{ color: '#0d9488', fontSize: '11px' }}>Auto-fetched from account</small>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>7. Father's Name</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: student.father_name ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {student.father_name || 'Not Provided'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>8. Mother's Name</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: student.mother_name ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {student.mother_name || 'Not Provided'}
+              </strong>
+            </div>
+
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)', gridColumn: 'span 2' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>9. Permanent / Mailing Address</span>
+              <p style={{ margin: '4px 0 0', fontSize: '13px', color: student.address ? 'var(--text-primary)' : 'var(--text-muted)' }}>
+                {student.address || 'Not Provided'}
+              </p>
+            </div>
           </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>user_id</span>
-            <strong style={{ display: 'block', fontSize: '12px', marginTop: '4px', fontFamily: 'monospace', wordBreak: 'break-all' }}>{student.user_id}</strong>
-          </div>
+          <h4 style={{ fontSize: '13px', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', margin: '20px 0 12px' }}>
+            Academic Cohort & Enrollment Identifiers
+          </h4>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '12px' }}>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Student ID</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px', color: '#173f73' }}>{student.student_id_number || student.student_id}</strong>
+            </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>programme_id</span>
-            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>{student.programme_id}</strong>
-            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{student.programme}</small>
-          </div>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Programme</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{student.programme}</strong>
+            </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>batch_id</span>
-            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>{student.batch_id}</strong>
-            <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{student.batch}</small>
-          </div>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Department</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{student.department}</strong>
+            </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>admission_date</span>
-            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>{student.admission_date}</strong>
-          </div>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Batch / Session</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{student.batch}</strong>
+              <small style={{ color: 'var(--text-muted)', fontSize: '11px' }}>{student.academic_session}</small>
+            </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>current_semester</span>
-            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px' }}>Semester {student.current_semester}</strong>
-          </div>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Current Semester</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>Semester {student.current_semester}</strong>
+            </div>
 
-          <div style={{ padding: '12px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
-            <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>status</span>
-            <strong style={{ display: 'block', fontSize: '15px', marginTop: '4px', textTransform: 'capitalize', color: student.status === 'active' ? '#10b981' : 'inherit' }}>{student.status}</strong>
+            <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'var(--surface-subtle)', border: '1px solid var(--border)' }}>
+              <span style={{ fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em', fontWeight: 600 }}>Admission Date</span>
+              <strong style={{ display: 'block', fontSize: '14px', marginTop: '2px' }}>{student.admission_date}</strong>
+            </div>
           </div>
         </div>
       </section>
@@ -536,6 +667,234 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
           </section>
         </div>
       </div>
+
+      {/* Modal: Fill / Edit Student Profile Details */}
+      {isProfileModalOpen && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px',
+            overflowY: 'auto',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsProfileModalOpen(false);
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              maxWidth: '680px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Official Student Profile Details</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Provide accurate details for institutional communication, grade sheets, and certification.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setIsProfileModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {profileError && (
+              <div className="alert alert-danger" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px' }}>
+                <AlertCircle size={16} />
+                <span>{profileError}</span>
+              </div>
+            )}
+
+            {profileSuccess && (
+              <div className="alert alert-success" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px' }}>
+                <CheckCircle size={16} />
+                <span>{profileSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveProfile}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+                {/* 1. Name */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    1. Full Name <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={profileName}
+                    onChange={(e) => setProfileName(e.target.value)}
+                    required
+                    placeholder="Enter full legal name"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                {/* 6. Enrolled Email (Auto-fetched, read-only) */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    6. Enrolled Email <small style={{ color: '#0d9488', fontWeight: 500 }}>(Auto-fetched from account)</small>
+                  </label>
+                  <input
+                    type="email"
+                    className="form-control"
+                    value={data.student.email}
+                    disabled
+                    readOnly
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', background: '#f3f4f6', cursor: 'not-allowed', color: '#6b7280' }}
+                  />
+                </div>
+
+                {/* 2. Date of Birth */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    2. Date of Birth
+                  </label>
+                  <input
+                    type="date"
+                    className="form-control"
+                    value={profileDob}
+                    onChange={(e) => setProfileDob(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                {/* 3. Gender */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    3. Gender
+                  </label>
+                  <select
+                    className="form-control"
+                    value={profileGender}
+                    onChange={(e) => setProfileGender(e.target.value)}
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  >
+                    <option value="">Select Gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                {/* 4. Class Roll No */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    4. Class Roll No.
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={profileRollNo}
+                    onChange={(e) => setProfileRollNo(e.target.value)}
+                    placeholder="e.g. CS-2026-042"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                {/* 5. Phone No */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    5. Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    value={profilePhone}
+                    onChange={(e) => setProfilePhone(e.target.value)}
+                    placeholder="e.g. +91 9876543210"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                {/* 7. Father Name */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    7. Father's Name
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={profileFatherName}
+                    onChange={(e) => setProfileFatherName(e.target.value)}
+                    placeholder="Enter father's full name"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                {/* 8. Mother Name */}
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    8. Mother's Name
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={profileMotherName}
+                    onChange={(e) => setProfileMotherName(e.target.value)}
+                    placeholder="Enter mother's full name"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                {/* 9. Address */}
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    9. Permanent / Communication Address
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="form-control"
+                    value={profileAddress}
+                    onChange={(e) => setProfileAddress(e.target.value)}
+                    placeholder="Enter house/street, city, state, postal code"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)', resize: 'vertical' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsProfileModalOpen(false)}
+                  disabled={isSavingProfile}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={isSavingProfile}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {isSavingProfile ? <RefreshCw size={14} className="spinning" /> : <CheckCircle size={14} />}
+                  {isSavingProfile ? 'Saving Details...' : 'Save Profile Details'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

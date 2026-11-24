@@ -63,6 +63,7 @@ Route::prefix('v1')->group(function (): void {
 
         // Dashboards & Portals (Student, Teacher, Department, Admin)
         Route::get('/dashboard/student', [DashboardController::class, 'student']);
+        Route::put('/student/profile', [DashboardController::class, 'updateStudentProfile']);
         Route::get('/dashboard/teacher', [DashboardController::class, 'teacher']);
         Route::get('/dashboard/department', [DashboardController::class, 'department']);
         Route::get('/dashboard/admin', [DashboardController::class, 'admin']);

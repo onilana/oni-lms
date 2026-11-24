@@ -27,7 +27,7 @@ class UserController
 
         if (
             !$user->isSuperAdmin() &&
-            !$user->hasRole([Role::COLLEGE_ADMIN, Role::DEPT_ADMIN]) &&
+            !$user->hasRole([Role::COLLEGE_ADMIN, Role::DEPT_ADMIN, Role::HOD, Role::TEACHER]) &&
             !$user->hasPermission('users.manage') &&
             !$user->hasPermission('users.view')
         ) {
@@ -38,29 +38,78 @@ class UserController
     public function index(Request $request): AnonymousResourceCollection
     {
         $this->authorizeAdmin($request);
+        $currentUser = $request->user();
 
         $query = User::query()
             ->with([
                 'roles.permissions',
                 'teacherProfile.department',
-                'studentProfile.programme',
+                'studentProfile.programme.department',
                 'studentProfile.batch',
             ])
             ->withCount(['enrolledCourses', 'taughtCourses'])
             ->orderBy('name');
 
+        // Department-level isolation for HoD, Dept Admin, and Teachers
+        if (!$currentUser->isInstitutionAdmin() && $currentUser->hasRole([Role::HOD, Role::DEPT_ADMIN, Role::TEACHER])) {
+            $assignedDeptId = $currentUser->getAssignedDepartmentId();
+            if ($assignedDeptId) {
+                $query->where(function ($q) use ($assignedDeptId) {
+                    $q->whereHas('teacherProfile', fn ($tq) => $tq->where('department_id', $assignedDeptId))
+                        ->orWhereHas('studentProfile.programme', fn ($sq) => $sq->where('department_id', $assignedDeptId));
+                });
+            } else {
+                // If not assigned to any department, cannot access students or teachers
+                $query->whereRaw('1 = 0');
+            }
+        } elseif ($request->filled('department_id')) {
+            $deptId = $request->query('department_id');
+            $query->where(function ($q) use ($deptId) {
+                $q->whereHas('teacherProfile', fn ($tq) => $tq->where('department_id', $deptId))
+                    ->orWhereHas('studentProfile.programme', fn ($sq) => $sq->where('department_id', $deptId));
+            });
+        }
+
         if ($request->filled('role')) {
-            $roleName = $request->query('role');
-            $query->whereHas('roles', fn ($q) => $q->where('name', $roleName));
+            $roleNames = array_map('trim', explode(',', $request->query('role')));
+            $query->whereHas('roles', fn ($q) => $q->whereIn('name', $roleNames));
         }
 
         if ($request->filled('status')) {
             $query->where('status', $request->query('status'));
         }
 
-        if ($request->filled('department_id')) {
-            $deptId = $request->query('department_id');
-            $query->whereHas('teacherProfile', fn ($q) => $q->where('department_id', $deptId));
+        if ($request->filled('programme_id')) {
+            $progId = $request->query('programme_id');
+            $query->whereHas('studentProfile', fn ($sq) => $sq->where('programme_id', $progId));
+        }
+
+        if ($request->filled('level')) {
+            $level = strtolower($request->query('level'));
+            $query->whereHas('studentProfile.programme', function ($pq) use ($level) {
+                if ($level === 'ug') {
+                    $pq->where('duration_years', '>=', 3)->where('duration_years', '<=', 5);
+                } elseif ($level === 'pg') {
+                    $pq->where('duration_years', 2);
+                } elseif ($level === 'phd' || $level === 'doctoral') {
+                    $pq->where('name', 'like', '%Ph.D%')->orWhere('name', 'like', '%Doctoral%');
+                } elseif ($level === 'diploma') {
+                    $pq->where('duration_years', '<=', 2)->where('name', 'like', '%Diploma%');
+                }
+            });
+        }
+
+        if ($request->filled('course_id')) {
+            $courseId = $request->query('course_id');
+            $query->where(function ($q) use ($courseId) {
+                $q->whereHas('enrolledCourses', fn ($cq) => $cq->where('courses.id', $courseId))
+                    ->orWhereHas('taughtCourses', fn ($cq) => $cq->where('courses.id', $courseId));
+            });
+        }
+
+        if ($request->filled('semester')) {
+            $sem = $request->integer('semester');
+            $query->whereHas('studentProfile', fn ($sq) => $sq->where('current_semester', $sem));
         }
 
         if ($request->filled('search')) {
@@ -80,14 +129,33 @@ class UserController
     public function show(Request $request, User $user): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $currentUser = $request->user();
+
+        // Enforce department access control for HoD and Teachers
+        if (!$currentUser->isInstitutionAdmin() && $currentUser->hasRole([Role::HOD, Role::DEPT_ADMIN, Role::TEACHER])) {
+            $assignedDeptId = $currentUser->getAssignedDepartmentId();
+            
+            // Check if student belongs to this department
+            if ($user->studentProfile) {
+                $studentDeptId = $user->studentProfile->programme?->department_id;
+                if ($studentDeptId !== $assignedDeptId) {
+                    abort(403, 'Access denied. You do not have permission to access student records outside your assigned department.');
+                }
+            } elseif ($user->teacherProfile) {
+                $teacherDeptId = $user->teacherProfile->department_id;
+                if ($teacherDeptId !== $assignedDeptId) {
+                    abort(403, 'Access denied. You do not have permission to access faculty records outside your assigned department.');
+                }
+            }
+        }
 
         $user->load([
             'roles.permissions',
             'teacherProfile.department',
-            'studentProfile.programme',
+            'studentProfile.programme.department',
             'studentProfile.batch',
-            'enrolledCourses',
-            'taughtCourses',
+            'enrolledCourses.department',
+            'taughtCourses.department',
         ])->loadCount(['enrolledCourses', 'taughtCourses']);
 
         return response()->json([

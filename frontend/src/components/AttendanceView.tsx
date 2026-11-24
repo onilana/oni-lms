@@ -26,6 +26,7 @@ import type {
 } from '../types/attendance';
 import type { Course } from '../types/course';
 import { useAuth } from '../context/AuthContext';
+import { StudentProfileModal } from './StudentProfileModal';
 
 export const AttendanceView: React.FC = () => {
   const { user, hasRole, hasPermission } = useAuth();
@@ -39,6 +40,8 @@ export const AttendanceView: React.FC = () => {
   // Common state
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
+  const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
 
   // Student mode state
   const [studentSummary, setStudentSummary] = useState<MyAttendanceSummary | null>(null);
@@ -529,7 +532,16 @@ export const AttendanceView: React.FC = () => {
               {courseSummaryRoster.map((item) => (
                 <tr key={item.student_id}>
                   <td>
-                    <strong>{item.name}</strong>
+                    <strong
+                      style={{ cursor: 'pointer', color: '#1d4ed8', textDecoration: 'underline' }}
+                      onClick={() => {
+                        setSelectedStudentId(item.student_id);
+                        setIsStudentModalOpen(true);
+                      }}
+                      title="Click to view student profile"
+                    >
+                      {item.name}
+                    </strong>
                     <small style={{ display: 'block', color: '#64748b' }}>{item.email}</small>
                   </td>
                   <td>
@@ -845,6 +857,16 @@ export const AttendanceView: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* STUDENT PROFILE DOSSIER MODAL */}
+      <StudentProfileModal
+        userId={selectedStudentId}
+        isOpen={isStudentModalOpen}
+        onClose={() => {
+          setIsStudentModalOpen(false);
+          setSelectedStudentId(null);
+        }}
+      />
     </div>
   );
 };

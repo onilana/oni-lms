@@ -14,6 +14,16 @@ class LessonController
 {
     public function index(Request $request, CourseSection $section): JsonResponse
     {
+        $user = $request->user();
+        if ($user && !$user->isInstitutionAdmin() && $user->hasRole(['hod', 'dept_admin', 'teacher'])) {
+            $assignedDeptId = $user->getAssignedDepartmentId();
+            $course = $section->course;
+            $isInstructor = $course?->instructors()->where('user_id', $user->id)->exists();
+            if ($course && $course->department_id !== $assignedDeptId && !$isInstructor) {
+                abort(403, 'Access denied. You do not have permission to view lesson curriculum outside your assigned department.');
+            }
+        }
+
         $lessons = Lesson::where('section_id', $section->id)
             ->with([
                 'course',

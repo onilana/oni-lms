@@ -22,8 +22,18 @@ class CourseController
             ->with(['department', 'programme', 'instructors.user'])
             ->withCount('enrolments');
 
-        // Filter by department or programme
-        if ($request->filled('department_id')) {
+        // Department isolation for HoD, Department Admins, and Faculty Instructors
+        if ($user && !$user->isInstitutionAdmin() && $user->hasRole([Role::HOD, Role::DEPT_ADMIN, Role::TEACHER])) {
+            $assignedDeptId = $user->getAssignedDepartmentId();
+            if ($assignedDeptId) {
+                $query->where(function ($q) use ($assignedDeptId, $user) {
+                    $q->where('department_id', $assignedDeptId)
+                      ->orWhereHas('instructors', fn ($sub) => $sub->where('user_id', $user->id));
+                });
+            } else {
+                $query->whereHas('instructors', fn ($sub) => $sub->where('user_id', $user->id));
+            }
+        } elseif ($request->filled('department_id')) {
             $query->where('department_id', $request->query('department_id'));
         }
 
@@ -81,8 +91,19 @@ class CourseController
         ], 201);
     }
 
-    public function show(Course $course): JsonResponse
+    public function show(Request $request, Course $course): JsonResponse
     {
+        $user = $request->user();
+
+        // Enforce department access control for HoD, Dept Admin, and Teachers
+        if ($user && !$user->isInstitutionAdmin() && $user->hasRole([Role::HOD, Role::DEPT_ADMIN, Role::TEACHER])) {
+            $assignedDeptId = $user->getAssignedDepartmentId();
+            $isInstructor = $course->instructors()->where('user_id', $user->id)->exists();
+            if ($course->department_id !== $assignedDeptId && !$isInstructor) {
+                abort(403, 'Access denied. You do not have permission to view course layout or resources under another department.');
+            }
+        }
+
         $course->load(['department', 'programme', 'creator', 'instructors.user', 'enrolments'])
             ->loadCount('enrolments');
 

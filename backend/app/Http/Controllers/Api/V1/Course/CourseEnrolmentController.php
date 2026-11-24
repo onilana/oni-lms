@@ -15,6 +15,15 @@ class CourseEnrolmentController
 {
     public function index(Request $request, Course $course): JsonResponse
     {
+        $user = $request->user();
+        if ($user && !$user->isInstitutionAdmin() && $user->hasRole(['hod', 'dept_admin', 'teacher'])) {
+            $assignedDeptId = $user->getAssignedDepartmentId();
+            $isInstructor = $course->instructors()->where('user_id', $user->id)->exists();
+            if ($course->department_id !== $assignedDeptId && !$isInstructor) {
+                abort(403, 'Access denied. You do not have permission to view student enrolments outside your assigned department.');
+            }
+        }
+
         $enrolments = CourseEnrolment::where('course_id', $course->id)
             ->with(['user', 'academicSession', 'semester'])
             ->orderBy('enrolled_at', 'desc')

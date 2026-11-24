@@ -9,6 +9,7 @@ import {
   Users,
   CheckCircle2,
   Edit2,
+  Trash2,
   X
 } from 'lucide-react';
 import { apiRequest, ApiError } from '../api/client';
@@ -17,9 +18,15 @@ import { useAuth } from '../context/AuthContext';
 
 export const AcademicView: React.FC = () => {
   const { hasPermission, hasRole } = useAuth();
-  const canManage = hasPermission('academic.manage') || hasRole('super_admin');
+  const canManage =
+    hasPermission('academic.manage') ||
+    hasRole('super_admin') ||
+    hasRole('college_admin') ||
+    hasRole('dept_admin') ||
+    hasRole('hod');
 
   const [activeTab, setActiveTab] = useState<'departments' | 'programmes' | 'sessions' | 'batches'>('departments');
+  const [deptFilterType, setDeptFilterType] = useState<'all' | 'parent' | 'sub'>('all');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [sessions, setSessions] = useState<AcademicSession[]>([]);
@@ -49,6 +56,15 @@ export const AcademicView: React.FC = () => {
   const [editDeptDesc, setEditDeptDesc] = useState('');
   const [editDeptStatus, setEditDeptStatus] = useState('active');
   const [editDeptParentId, setEditDeptParentId] = useState('');
+
+  // Edit Programme modal
+  const [editingProg, setEditingProg] = useState<Programme | null>(null);
+  const [editProgDeptId, setEditProgDeptId] = useState('');
+  const [editProgName, setEditProgName] = useState('');
+  const [editProgCode, setEditProgCode] = useState('');
+  const [editProgYears, setEditProgYears] = useState(4);
+  const [editProgSems, setEditProgSems] = useState(8);
+  const [editProgStatus, setEditProgStatus] = useState('active');
 
   // Semester modals (Edit & Create)
   const [editingSemester, setEditingSemester] = useState<Semester | null>(null);
@@ -174,6 +190,62 @@ export const AcademicView: React.FC = () => {
       setEditingDept(null);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error updating department');
+    }
+  };
+
+  const handleDeleteDepartment = async (dept: Department) => {
+    if (!confirm(`Are you sure you want to delete department "${dept.name}" (${dept.code})? This will also remove any nested sub-department mappings.`)) {
+      return;
+    }
+    try {
+      await apiRequest(`/academic/departments/${dept.id}`, { method: 'DELETE' });
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error deleting department');
+    }
+  };
+
+  const openEditProgramme = (prog: Programme) => {
+    setEditingProg(prog);
+    setEditProgDeptId(prog.department_id);
+    setEditProgName(prog.name);
+    setEditProgCode(prog.code);
+    setEditProgYears(prog.duration_years);
+    setEditProgSems(prog.total_semesters);
+    setEditProgStatus(prog.status || 'active');
+  };
+
+  const handleUpdateProgramme = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingProg) return;
+    try {
+      await apiRequest(`/academic/programmes/${editingProg.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          department_id: editProgDeptId,
+          name: editProgName,
+          code: editProgCode,
+          duration_years: editProgYears,
+          total_semesters: editProgSems,
+          status: editProgStatus,
+        }),
+      });
+      setEditingProg(null);
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error updating programme');
+    }
+  };
+
+  const handleDeleteProgramme = async (prog: Programme) => {
+    if (!confirm(`Are you sure you want to delete degree programme "${prog.name}" (${prog.code})?`)) {
+      return;
+    }
+    try {
+      await apiRequest(`/academic/programmes/${prog.id}`, { method: 'DELETE' });
+      await fetchData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error deleting programme');
     }
   };
 
@@ -305,44 +377,111 @@ export const AcademicView: React.FC = () => {
       <div className="tab-content">
         {/* Departments Tab */}
         {activeTab === 'departments' && (
-          <div className="grid-cards">
-            {departments.map((dept) => (
-              <article key={dept.id} className="card-item">
-                <div className="card-header">
-                  <span className="card-tag">{dept.code}</span>
-                  <span className={`status ${dept.status === 'active' ? 'ok' : 'pending'}`}>
-                    {dept.status}
-                  </span>
-                </div>
-                <h3>{dept.name}</h3>
-                {dept.parent && (
-                  <div style={{ marginBottom: '4px' }}>
-                    <span className="badge badge-role" style={{ fontSize: '11px' }}>
-                      Sub-dept of: {dept.parent.name}
-                    </span>
-                  </div>
-                )}
-                <p>{dept.description || 'No description provided.'}</p>
-                <div className="card-footer">
-                  <span><strong>{dept.programmes_count ?? 0}</strong> Programmes</span>
-                  <span><strong>{dept.teachers_count ?? 0}</strong> Faculty</span>
-                  {dept.sub_departments && dept.sub_departments.length > 0 && (
-                    <span><strong>{dept.sub_departments.length}</strong> Sub-depts</span>
-                  )}
-                  {canManage && (
-                    <button
-                      type="button"
-                      className="btn btn-outline btn-sm"
-                      onClick={() => openEditDept(dept)}
-                      style={{ marginLeft: 'auto' }}
-                      title="Edit Department"
-                    >
-                      <Edit2 size={13} /> Edit
-                    </button>
-                  )}
-                </div>
-              </article>
-            ))}
+          <div>
+            {/* Department Hierarchy Filter Toolbar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
+              <div className="view-toggle" style={{ margin: 0 }}>
+                <button
+                  type="button"
+                  className={`toggle-btn ${deptFilterType === 'all' ? 'active' : ''}`}
+                  onClick={() => setDeptFilterType('all')}
+                >
+                  All Departments ({departments.length})
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-btn ${deptFilterType === 'parent' ? 'active' : ''}`}
+                  onClick={() => setDeptFilterType('parent')}
+                >
+                  Parent Departments ({departments.filter(d => !d.parent_id).length})
+                </button>
+                <button
+                  type="button"
+                  className={`toggle-btn ${deptFilterType === 'sub' ? 'active' : ''}`}
+                  onClick={() => setDeptFilterType('sub')}
+                >
+                  Sub-Departments ({departments.filter(d => !!d.parent_id).length})
+                </button>
+              </div>
+
+              {canManage && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => {
+                    setDeptParentId('');
+                    setIsDeptModalOpen(true);
+                  }}
+                >
+                  <Plus size={14} /> Create Parent / Sub Department
+                </button>
+              )}
+            </div>
+
+            <div className="grid-cards">
+              {departments
+                .filter(d => {
+                  if (deptFilterType === 'parent') return !d.parent_id;
+                  if (deptFilterType === 'sub') return !!d.parent_id;
+                  return true;
+                })
+                .map((dept) => (
+                  <article key={dept.id} className="card-item" style={{ borderLeft: dept.parent_id ? '4px solid #0284c7' : '4px solid #0f766e' }}>
+                    <div className="card-header">
+                      <span className="card-tag">{dept.code}</span>
+                      <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                        {dept.parent_id ? (
+                          <span className="badge badge-accent" style={{ fontSize: '11px' }}>Sub-Department</span>
+                        ) : (
+                          <span className="badge badge-role" style={{ fontSize: '11px' }}>Parent Department</span>
+                        )}
+                        <span className={`status ${dept.status === 'active' ? 'ok' : 'pending'}`}>
+                          {dept.status}
+                        </span>
+                      </div>
+                    </div>
+                    <h3 style={{ margin: '8px 0 4px' }}>{dept.name}</h3>
+
+                    {dept.parent && (
+                      <div style={{ margin: '4px 0 8px' }}>
+                        <span style={{ fontSize: '12px', color: '#0284c7', background: '#e0f2fe', padding: '3px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          ↳ Nested under Parent: <strong>{dept.parent.name}</strong>
+                        </span>
+                      </div>
+                    )}
+
+                    <p>{dept.description || 'No description provided.'}</p>
+                    <div className="card-footer">
+                      <span><strong>{dept.programmes_count ?? 0}</strong> Programmes</span>
+                      <span><strong>{dept.teachers_count ?? 0}</strong> Faculty</span>
+                      {dept.sub_departments && dept.sub_departments.length > 0 && (
+                        <span style={{ color: '#0f766e' }}><strong>{dept.sub_departments.length}</strong> Sub-Depts</span>
+                      )}
+                      {canManage && (
+                        <div style={{ marginLeft: 'auto', display: 'flex', gap: '6px' }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => openEditDept(dept)}
+                            title="Edit Department Name, Code, or Parent Department"
+                          >
+                            <Edit2 size={13} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            style={{ color: '#ef4444' }}
+                            onClick={() => handleDeleteDepartment(dept)}
+                            title="Delete Department"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </article>
+                ))}
+            </div>
           </div>
         )}
 
@@ -358,6 +497,7 @@ export const AcademicView: React.FC = () => {
                   <th>Duration</th>
                   <th>Semesters</th>
                   <th>Status</th>
+                  {canManage && <th>Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -373,6 +513,29 @@ export const AcademicView: React.FC = () => {
                         {prog.status}
                       </span>
                     </td>
+                    {canManage && (
+                      <td>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            onClick={() => openEditProgramme(prog)}
+                            title="Edit Programme"
+                          >
+                            <Edit2 size={13} /> Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="btn btn-outline btn-sm"
+                            style={{ color: '#ef4444' }}
+                            onClick={() => handleDeleteProgramme(prog)}
+                            title="Delete Programme"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -494,14 +657,27 @@ export const AcademicView: React.FC = () => {
                   onChange={(e) => setDeptName(e.target.value)}
                 />
               </div>
-              <div className="form-group">
-                <label>Parent Department (Optional — leave blank for top-level)</label>
-                <select value={deptParentId} onChange={(e) => setDeptParentId(e.target.value)}>
-                  <option value="">— None (Top-Level Department) —</option>
+              <div className="form-group" style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '6px' }}>
+                <label style={{ fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Building2 size={16} /> Hierarchy: Parent Department Setting
+                </label>
+                <select
+                  value={deptParentId}
+                  onChange={(e) => setDeptParentId(e.target.value)}
+                  style={{ background: '#fff' }}
+                >
+                  <option value="">— Standalone / Top-Level Parent Department (No Parent) —</option>
                   {departments.map((d) => (
-                    <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                    <option key={d.id} value={d.id}>
+                      ↳ Sub-Department under: {d.name} ({d.code})
+                    </option>
                   ))}
                 </select>
+                <small style={{ color: '#15803d', display: 'block', marginTop: '6px', fontSize: '12px' }}>
+                  {deptParentId
+                    ? 'Creating as a Sub-Department nested under the selected parent.'
+                    : 'Creating as a Top-Level Parent Department.'}
+                </small>
               </div>
               <div className="form-group">
                 <label>Description (Optional)</label>
@@ -608,16 +784,29 @@ export const AcademicView: React.FC = () => {
                   onChange={(e) => setEditDeptName(e.target.value)}
                 />
               </div>
-              <div className="form-group">
-                <label>Parent Department (Optional — leave blank for top-level)</label>
-                <select value={editDeptParentId} onChange={(e) => setEditDeptParentId(e.target.value)}>
-                  <option value="">— None (Top-Level Department) —</option>
+              <div className="form-group" style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '6px' }}>
+                <label style={{ fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Building2 size={16} /> Hierarchy: Parent Department Setting
+                </label>
+                <select
+                  value={editDeptParentId}
+                  onChange={(e) => setEditDeptParentId(e.target.value)}
+                  style={{ background: '#fff' }}
+                >
+                  <option value="">— Standalone / Top-Level Parent Department (No Parent) —</option>
                   {departments
                     .filter((d) => d.id !== editingDept?.id)
                     .map((d) => (
-                      <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                      <option key={d.id} value={d.id}>
+                        ↳ Sub-Department under: {d.name} ({d.code})
+                      </option>
                     ))}
                 </select>
+                <small style={{ color: '#15803d', display: 'block', marginTop: '6px', fontSize: '12px' }}>
+                  {editDeptParentId
+                    ? 'This department is configured as a Sub-Department nested under the selected parent.'
+                    : 'This department is configured as a Top-Level Parent Department (can have sub-departments under it).'}
+                </small>
               </div>
               <div className="form-group">
                 <label>Status</label>
@@ -636,6 +825,76 @@ export const AcademicView: React.FC = () => {
                 />
               </div>
               <button type="submit" className="btn btn-primary btn-block">Save Changes</button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Edit Programme */}
+      {editingProg && (
+        <div className="modal-backdrop" onClick={() => setEditingProg(null)}>
+          <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h3>Edit Degree Programme: {editingProg.code}</h3>
+              <button className="btn-close" onClick={() => setEditingProg(null)}><X size={18} /></button>
+            </div>
+            <form onSubmit={handleUpdateProgramme} className="modal-form">
+              <div className="form-group">
+                <label>Parent Department</label>
+                <select value={editProgDeptId} onChange={(e) => setEditProgDeptId(e.target.value)}>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Programme Code</label>
+                <input
+                  required
+                  placeholder="e.g. BTECH-CSE"
+                  value={editProgCode}
+                  onChange={(e) => setEditProgCode(e.target.value.toUpperCase())}
+                />
+              </div>
+              <div className="form-group">
+                <label>Programme Name</label>
+                <input
+                  required
+                  placeholder="e.g. Bachelor of Technology in Computer Science"
+                  value={editProgName}
+                  onChange={(e) => setEditProgName(e.target.value)}
+                />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div className="form-group">
+                  <label>Duration (Years)</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={6}
+                    value={editProgYears}
+                    onChange={(e) => setEditProgYears(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Total Semesters</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={12}
+                    value={editProgSems}
+                    onChange={(e) => setEditProgSems(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Status</label>
+                <select value={editProgStatus} onChange={(e) => setEditProgStatus(e.target.value)}>
+                  <option value="active">Active</option>
+                  <option value="inactive">Inactive</option>
+                </select>
+              </div>
+              <button type="submit" className="btn btn-primary btn-block">Save Programme Changes</button>
             </form>
           </div>
         </div>

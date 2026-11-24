@@ -9,7 +9,12 @@ class ProgrammeRequest extends FormRequest
 {
     public function authorize(): bool
     {
-        return $this->user()?->hasPermission('academic.manage') ?? false;
+        $user = $this->user();
+        if (!$user) return false;
+
+        return $user->hasPermission('academic.manage')
+            || $user->isSuperAdmin()
+            || $user->hasRole(['college_admin', 'dept_admin', 'hod']);
     }
 
     public function rules(): array
