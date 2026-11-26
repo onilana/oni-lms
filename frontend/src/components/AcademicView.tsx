@@ -643,7 +643,7 @@ export const AcademicView: React.FC = () => {
                 <label>Department Code (Unique)</label>
                 <input
                   required
-                  placeholder="e.g. CSE, ECE, MECH"
+                  placeholder="e.g. ZOO, BOT, PHY, CHE"
                   value={deptCode}
                   onChange={(e) => setDeptCode(e.target.value.toUpperCase())}
                 />
@@ -652,7 +652,7 @@ export const AcademicView: React.FC = () => {
                 <label>Department Full Name</label>
                 <input
                   required
-                  placeholder="e.g. Department of Computer Science & Engineering"
+                  placeholder="e.g. Department of Zoology"
                   value={deptName}
                   onChange={(e) => setDeptName(e.target.value)}
                 />
@@ -715,7 +715,7 @@ export const AcademicView: React.FC = () => {
                 <label>Programme Code</label>
                 <input
                   required
-                  placeholder="e.g. BTECH-CSE"
+                  placeholder="e.g. BA, BSC, BCOM, BED"
                   value={progCode}
                   onChange={(e) => setProgCode(e.target.value.toUpperCase())}
                 />
@@ -724,7 +724,7 @@ export const AcademicView: React.FC = () => {
                 <label>Programme Name</label>
                 <input
                   required
-                  placeholder="e.g. Bachelor of Technology in Computer Science"
+                  placeholder="e.g. Bachelor of Science"
                   value={progName}
                   onChange={(e) => setProgName(e.target.value)}
                 />
@@ -770,7 +770,7 @@ export const AcademicView: React.FC = () => {
                 <label>Department Code (Unique)</label>
                 <input
                   required
-                  placeholder="e.g. CSE, ECE, MECH"
+                  placeholder="e.g. ZOO, BOT, PHY, CHE"
                   value={editDeptCode}
                   onChange={(e) => setEditDeptCode(e.target.value.toUpperCase())}
                 />
@@ -779,7 +779,7 @@ export const AcademicView: React.FC = () => {
                 <label>Department Full Name</label>
                 <input
                   required
-                  placeholder="e.g. Department of Computer Science & Engineering"
+                  placeholder="e.g. Department of Zoology"
                   value={editDeptName}
                   onChange={(e) => setEditDeptName(e.target.value)}
                 />
@@ -851,7 +851,7 @@ export const AcademicView: React.FC = () => {
                 <label>Programme Code</label>
                 <input
                   required
-                  placeholder="e.g. BTECH-CSE"
+                  placeholder="e.g. BA, BSC, BCOM, BED"
                   value={editProgCode}
                   onChange={(e) => setEditProgCode(e.target.value.toUpperCase())}
                 />
@@ -860,7 +860,7 @@ export const AcademicView: React.FC = () => {
                 <label>Programme Name</label>
                 <input
                   required
-                  placeholder="e.g. Bachelor of Technology in Computer Science"
+                  placeholder="e.g. Bachelor of Science"
                   value={editProgName}
                   onChange={(e) => setEditProgName(e.target.value)}
                 />

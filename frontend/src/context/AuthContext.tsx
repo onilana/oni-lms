@@ -1,13 +1,13 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { apiRequest } from '../api/client';
+import { apiRequest, ensureCsrfCookie } from '../api/client';
 import type { AuthResponse, User } from '../types/auth';
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
+  refreshUser: () => Promise<void>;
   hasRole: (role: string | string[]) => boolean;
   hasPermission: (permission: string) => boolean;
 }
@@ -15,54 +15,43 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem('oni_lms_token'));
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
+  const refreshUser = async () => {
+    try {
+      const response = await apiRequest<{ user: User }>('/auth/me');
+      setUser(response.user);
+    } catch {
+      setUser(null);
+    }
+  };
+
   useEffect(() => {
     async function loadUser() {
-      if (!token) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        const response = await apiRequest<{ user: User }>('/auth/me');
-        setUser(response.user);
-      } catch (err) {
-        console.warn('Stored token invalid, clearing session', err);
-        localStorage.removeItem('oni_lms_token');
-        setToken(null);
-        setUser(null);
-      } finally {
-        setLoading(false);
-      }
+      await refreshUser();
+      setLoading(false);
     }
 
     loadUser();
-  }, [token]);
+  }, []);
 
   const login = async (email: string, password: string) => {
+    await ensureCsrfCookie();
     const response = await apiRequest<AuthResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password, device_name: 'browser' }),
     });
 
-    localStorage.setItem('oni_lms_token', response.token);
-    setToken(response.token);
     setUser(response.user);
   };
 
   const logout = async () => {
     try {
-      if (token) {
-        await apiRequest('/auth/logout', { method: 'POST' });
-      }
+      await apiRequest('/auth/logout', { method: 'POST' });
     } catch (err) {
       console.warn('Logout error', err);
     } finally {
-      localStorage.removeItem('oni_lms_token');
-      setToken(null);
       setUser(null);
     }
   };
@@ -83,10 +72,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     <AuthContext.Provider
       value={{
         user,
-        token,
         loading,
         login,
         logout,
+        refreshUser,
         hasRole,
         hasPermission,
       }}

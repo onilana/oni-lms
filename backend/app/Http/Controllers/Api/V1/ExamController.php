@@ -13,13 +13,14 @@ use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 
 class ExamController
 {
     public function index(Request $request, Course $course): AnonymousResourceCollection
     {
         $user = $request->user();
-        $isTeacherOrAdmin = $user && $this->canManage($course, $user);
+        $isTeacherOrAdmin = $user && Gate::allows('manageCourse', [Exam::class, $course]);
 
         $query = $course->exams();
         if (!$isTeacherOrAdmin) {
@@ -42,7 +43,7 @@ class ExamController
 
     public function show(Request $request, Exam $exam): ExamResource
     {
-        if (! $exam->is_published && ! $this->canManage($exam->course, $request->user())) {
+        if (! Gate::allows('view', $exam)) {
             abort(404);
         }
 
@@ -84,8 +85,7 @@ class ExamController
 
     public function destroy(Request $request, Exam $exam): JsonResponse
     {
-        $user = $request->user();
-        if (! $this->canManage($exam->course, $user)) {
+        if (! Gate::allows('delete', $exam)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -117,12 +117,5 @@ class ExamController
             'message' => 'Questions attached to exam successfully',
             'data' => new ExamResource($exam->fresh(['course', 'questions'])->loadCount('questions')),
         ]);
-    }
-
-    private function canManage(Course $course, User $user): bool
-    {
-        return $course->isTaughtBy($user)
-            || $user->isSuperAdmin()
-            || ($user->hasPermission('exams.manage') && ! $user->hasRole('teacher'));
     }
 }

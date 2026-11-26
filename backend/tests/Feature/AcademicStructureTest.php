@@ -61,7 +61,8 @@ class AcademicStructureTest extends TestCase
                 ],
             ]);
 
-        $this->assertCount(2, $response->json('departments'));
+        $this->assertCount(Department::count(), $response->json('departments'));
+        $this->assertGreaterThanOrEqual(15, count($response->json('departments')));
     }
 
     public function test_admin_can_create_department(): void

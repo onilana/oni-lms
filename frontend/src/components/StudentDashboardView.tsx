@@ -732,6 +732,31 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
             )}
 
             <form onSubmit={handleSaveProfile}>
+              {/* Official Academic Assignment (Managed by Admin/HoD - Read Only for Student) */}
+              <div style={{ background: '#f8fafc', padding: '12px 16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                  <span style={{ fontSize: '12px', fontWeight: 700, textTransform: 'uppercase', color: '#64748b', letterSpacing: '0.05em' }}>
+                    Institutional Academic Enrollment
+                  </span>
+                  <span style={{ fontSize: '11px', background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '4px', fontWeight: 600 }}>
+                    Managed by Admin / HoD
+                  </span>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '8px', fontSize: '13px' }}>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Department: </span>
+                    <strong style={{ color: '#0f172a' }}>{data.student.department || 'Not Assigned'}</strong>
+                  </div>
+                  <div>
+                    <span style={{ color: '#64748b' }}>Programme: </span>
+                    <strong style={{ color: '#0f172a' }}>{data.student.programme || 'Not Assigned'}</strong>
+                  </div>
+                </div>
+                <p style={{ margin: '6px 0 0 0', fontSize: '11px', color: '#94a3b8' }}>
+                  * To correct or change your assigned Degree Programme or Department, please contact your College Administrator or Head of Department (HoD).
+                </p>
+              </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
                 {/* 1. Name */}
                 <div className="form-group">

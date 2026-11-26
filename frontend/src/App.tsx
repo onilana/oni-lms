@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { LoginModal } from './components/LoginModal';
+import { ForcePasswordChangeModal } from './components/ForcePasswordChangeModal';
 import { AcademicView } from './components/AcademicView';
 import { CoursesView } from './components/CoursesView';
 import { LessonPlayerView } from './components/LessonPlayerView';
@@ -532,6 +533,7 @@ function MainApp() {
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
+      <ForcePasswordChangeModal />
     </div>
   );
 }

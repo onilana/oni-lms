@@ -10,6 +10,7 @@ use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\RoleAndPermissionSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class WordPressIntegrationTest extends TestCase
@@ -68,14 +69,33 @@ class WordPressIntegrationTest extends TestCase
 
     public function test_admin_can_view_wordpress_integration_status(): void
     {
+        Http::fake([
+            '*' => Http::response(['name' => 'College WordPress'], 200, ['X-WP-Version' => '6.7']),
+        ]);
+
         $response = $this->actingAs($this->admin, 'sanctum')
             ->getJson('/api/v1/integrations/wordpress/status');
 
         $response->assertStatus(200)
             ->assertJsonPath('data.status', 'connected')
+            ->assertJsonPath('data.is_healthy', true)
             ->assertJsonPath('data.theme.slug', 'oni_lana')
             ->assertJsonPath('data.database_separation.enforced', true)
             ->assertJsonPath('data.database_separation.shared_credentials', false);
+    }
+
+    public function test_wordpress_status_reports_unreachable_when_api_fails(): void
+    {
+        Http::fake([
+            '*' => Http::response([], 503),
+        ]);
+
+        $response = $this->actingAs($this->admin, 'sanctum')
+            ->getJson('/api/v1/integrations/wordpress/status');
+
+        $response->assertStatus(200)
+            ->assertJsonPath('data.status', 'unreachable')
+            ->assertJsonPath('data.is_healthy', false);
     }
 
     public function test_student_cannot_view_wordpress_integration_status(): void
@@ -111,14 +131,34 @@ class WordPressIntegrationTest extends TestCase
         ]);
     }
 
+    private function makeSignedSsoToken(array $overrides = [], string $secret = 'test-wp-sso-secret-key'): string
+    {
+        $now = time();
+        $claims = array_merge([
+            'iss' => rtrim((string) config('wordpress.url'), '/'),
+            'aud' => rtrim((string) config('app.url'), '/'),
+            'email' => 'alex.turner@oni-test.edu',
+            'email_verified' => true,
+            'iat' => $now,
+            'exp' => $now + 120,
+            'nonce' => bin2hex(random_bytes(16)),
+        ], $overrides);
+
+        $encodedPayload = rtrim(strtr(base64_encode(json_encode($claims)), '+/', '-_'), '=');
+        $signature = hash_hmac('sha256', $encodedPayload, $secret);
+
+        return "{$encodedPayload}.{$signature}";
+    }
+
     public function test_sso_handshake_authenticates_student_and_issues_token(): void
     {
-        $secret = config('wordpress.webhook_secret', 'oni-wp-secret-key-2026');
+        config(['wordpress.webhook_secret' => 'test-wp-sso-secret-key']);
+        $token = $this->makeSignedSsoToken();
 
         $response = $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
             'email' => 'alex.turner@oni-test.edu',
             'name' => 'Alex Turner',
-            'token' => $secret,
+            'token' => $token,
         ]);
 
         $response->assertStatus(200)
@@ -132,8 +172,26 @@ class WordPressIntegrationTest extends TestCase
         ]);
     }
 
+    public function test_sso_handshake_with_missing_or_prefix_token_is_rejected(): void
+    {
+        config(['wordpress.webhook_secret' => 'test-wp-sso-secret-key']);
+
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => 'admin@onilms.edu',
+            'name' => 'Admin',
+        ])->assertStatus(422);
+
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => 'admin@onilms.edu',
+            'name' => 'Admin',
+            'token' => 'wp-sso-forged-token',
+        ])->assertStatus(401);
+    }
+
     public function test_sso_handshake_with_invalid_token_is_rejected(): void
     {
+        config(['wordpress.webhook_secret' => 'test-wp-sso-secret-key']);
+
         $response = $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
             'email' => 'intruder@unknown.com',
             'name' => 'Intruder',
@@ -142,6 +200,43 @@ class WordPressIntegrationTest extends TestCase
 
         $response->assertStatus(401)
             ->assertJsonPath('message', 'Invalid SSO handshake signature.');
+    }
+
+    public function test_sso_handshake_rejects_expired_unverified_and_replayed_assertions(): void
+    {
+        config(['wordpress.webhook_secret' => 'test-wp-sso-secret-key']);
+
+        $expiredToken = $this->makeSignedSsoToken([
+            'iat' => time() - 300,
+            'exp' => time() - 60,
+        ]);
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => 'alex.turner@oni-test.edu',
+            'name' => 'Alex Turner',
+            'token' => $expiredToken,
+        ])->assertStatus(401);
+
+        $unverifiedToken = $this->makeSignedSsoToken([
+            'email_verified' => false,
+        ]);
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => 'alex.turner@oni-test.edu',
+            'name' => 'Alex Turner',
+            'token' => $unverifiedToken,
+        ])->assertStatus(401);
+
+        $replayToken = $this->makeSignedSsoToken();
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => 'alex.turner@oni-test.edu',
+            'name' => 'Alex Turner',
+            'token' => $replayToken,
+        ])->assertStatus(200);
+
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => 'alex.turner@oni-test.edu',
+            'name' => 'Alex Turner',
+            'token' => $replayToken,
+        ])->assertStatus(401);
     }
 
     public function test_admin_can_retrieve_wordpress_code_snippets(): void

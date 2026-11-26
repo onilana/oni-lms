@@ -176,6 +176,18 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
     fetchUsers();
   }, [activeSection, adminSubRole, semesterFilter, statusFilter, deptFilter, levelFilter, progFilter, courseFilter]);
 
+  const getProgrammesForDepartment = (deptId: string) => {
+    if (!deptId) return programmes;
+    const dept = departments.find((d) => d.id === deptId);
+    const direct = programmes.filter((p) => p.department_id === deptId);
+    if (direct.length > 0) return direct;
+    if (dept?.parent_id) {
+      const parentProgs = programmes.filter((p) => p.department_id === dept.parent_id);
+      if (parentProgs.length > 0) return parentProgs;
+    }
+    return programmes;
+  };
+
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     fetchUsers();
@@ -221,7 +233,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
     setEditEmail(u.email);
     setEditStatus(u.status);
     setEditRole(u.roles[0]?.name || 'student');
-    setEditDeptId(u.teacher_profile?.department_id || '');
+    setEditDeptId(u.teacher_profile?.department_id || u.student_profile?.department_id || '');
     setEditEmpId(u.teacher_profile?.employee_id_number || '');
     setEditDesignation(u.teacher_profile?.designation || 'Faculty Member');
     setEditProgId(u.student_profile?.programme_id || '');
@@ -814,9 +826,14 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                 </div>
                 <div className="form-group">
                   <label>Primary Role</label>
-                  <select value={createRole} onChange={(e) => setCreateRole(e.target.value)}>
+                  <select value={createRole} onChange={(e) => {
+                    const newRole = e.target.value;
+                    setCreateRole(newRole);
+                    if (newRole === 'hod') setCreateDesignation('Head of Department');
+                  }}>
                     <option value="student">Student</option>
                     <option value="teacher">Teacher / Faculty</option>
+                    <option value="hod">Head of Department (HoD)</option>
                     <option value="dept_admin">Department Administrator</option>
                     <option value="college_admin">College Administrator</option>
                     <option value="super_admin">Super Administrator</option>
@@ -835,17 +852,45 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
               {/* Dynamic Profile Fields based on selected role */}
               {createRole === 'student' && (
                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
-                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Profile Details</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Academic &amp; Programme Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select
+                        value={createDeptId}
+                        onChange={(e) => {
+                          const dId = e.target.value;
+                          setCreateDeptId(dId);
+                          // Auto select first programme of this department (or parent department)
+                          const matching = getProgrammesForDepartment(dId);
+                          if (matching.length > 0) setCreateProgId(matching[0].id);
+                        }}
+                      >
+                        <option value="">Select Department...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="form-group">
                       <label>Degree Programme</label>
-                      <select value={createProgId} onChange={(e) => setCreateProgId(e.target.value)}>
+                      <select
+                        value={createProgId}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          setCreateProgId(pId);
+                          const prog = programmes.find((p) => p.id === pId);
+                          if (prog && !createDeptId) setCreateDeptId(prog.department_id);
+                        }}
+                      >
                         <option value="">Select Programme...</option>
-                        {programmes.map((p) => (
+                        {getProgrammesForDepartment(createDeptId).map((p) => (
                           <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
                         ))}
                       </select>
                     </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="form-group">
                       <label>Student ID Number</label>
                       <input
@@ -865,15 +910,18 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                       />
                     </div>
                   </div>
+                  <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Student will be automatically enrolled into all courses and curriculum of the assigned programme.
+                  </small>
                 </div>
               )}
 
-              {(createRole === 'teacher' || createRole === 'dept_admin') && (
+              {(createRole === 'teacher' || createRole === 'hod' || createRole === 'dept_admin') && (
                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
-                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Faculty Profile Details</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Faculty / HoD Department Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
                     <div className="form-group">
-                      <label>Department</label>
+                      <label>Assigned Department</label>
                       <select value={createDeptId} onChange={(e) => setCreateDeptId(e.target.value)}>
                         <option value="">Select Department...</option>
                         {departments.map((d) => (
@@ -881,6 +929,17 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                         ))}
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label>Degree Programme (Optional)</label>
+                      <select value={createProgId} onChange={(e) => setCreateProgId(e.target.value)}>
+                        <option value="">All Department Programmes...</option>
+                        {(createDeptId ? programmes.filter((p) => p.department_id === createDeptId) : programmes).map((p) => (
+                          <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="form-group">
                       <label>Employee ID Number</label>
                       <input
@@ -890,14 +949,17 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                       />
                     </div>
                     <div className="form-group">
-                      <label>Designation</label>
+                      <label>Academic Designation</label>
                       <input
-                        placeholder="e.g. Associate Professor"
+                        placeholder="e.g. Professor / Head of Department"
                         value={createDesignation}
                         onChange={(e) => setCreateDesignation(e.target.value)}
                       />
                     </div>
                   </div>
+                  <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Instructor will be automatically assigned to teach and access all curriculum in this department.
+                  </small>
                 </div>
               )}
 
@@ -945,9 +1007,14 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
                   <label>Primary Role</label>
-                  <select value={editRole} onChange={(e) => setEditRole(e.target.value)}>
+                  <select value={editRole} onChange={(e) => {
+                    const newRole = e.target.value;
+                    setEditRole(newRole);
+                    if (newRole === 'hod' && !editDesignation) setEditDesignation('Head of Department');
+                  }}>
                     <option value="student">Student</option>
                     <option value="teacher">Teacher / Faculty</option>
+                    <option value="hod">Head of Department (HoD)</option>
                     <option value="dept_admin">Department Administrator</option>
                     <option value="college_admin">College Administrator</option>
                     <option value="super_admin">Super Administrator</option>
@@ -965,17 +1032,44 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
 
               {editRole === 'student' && (
                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
-                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Profile Details</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Academic &amp; Programme Assignment</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select
+                        value={editDeptId}
+                        onChange={(e) => {
+                          const dId = e.target.value;
+                          setEditDeptId(dId);
+                          const deProg = programmes.find((p) => p.department_id === dId);
+                          if (deProg) setEditProgId(deProg.id);
+                        }}
+                      >
+                        <option value="">Select Department...</option>
+                        {departments.map((d) => (
+                          <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                        ))}
+                      </select>
+                    </div>
                     <div className="form-group">
                       <label>Degree Programme</label>
-                      <select value={editProgId} onChange={(e) => setEditProgId(e.target.value)}>
+                      <select
+                        value={editProgId}
+                        onChange={(e) => {
+                          const pId = e.target.value;
+                          setEditProgId(pId);
+                          const prog = programmes.find((p) => p.id === pId);
+                          if (prog) setEditDeptId(prog.department_id);
+                        }}
+                      >
                         <option value="">Select Programme...</option>
-                        {programmes.map((p) => (
+                        {(editDeptId ? programmes.filter((p) => p.department_id === editDeptId) : programmes).map((p) => (
                           <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
                         ))}
                       </select>
                     </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="form-group">
                       <label>Student ID Number</label>
                       <input
@@ -995,15 +1089,18 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                       />
                     </div>
                   </div>
+                  <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Changing Programme/Department automatically shifts student course enrolments to the new curriculum.
+                  </small>
                 </div>
               )}
 
-              {(editRole === 'teacher' || editRole === 'dept_admin') && (
+              {(editRole === 'teacher' || editRole === 'hod' || editRole === 'dept_admin') && (
                 <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
-                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Faculty Profile Details</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                  <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Faculty / HoD Department Details</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
                     <div className="form-group">
-                      <label>Department</label>
+                      <label>Assigned Department</label>
                       <select value={editDeptId} onChange={(e) => setEditDeptId(e.target.value)}>
                         <option value="">Select Department...</option>
                         {departments.map((d) => (
@@ -1011,6 +1108,17 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                         ))}
                       </select>
                     </div>
+                    <div className="form-group">
+                      <label>Degree Programme (Optional)</label>
+                      <select value={editProgId} onChange={(e) => setEditProgId(e.target.value)}>
+                        <option value="">All Department Programmes...</option>
+                        {(editDeptId ? programmes.filter((p) => p.department_id === editDeptId) : programmes).map((p) => (
+                          <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                     <div className="form-group">
                       <label>Employee ID Number</label>
                       <input
@@ -1020,7 +1128,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                       />
                     </div>
                     <div className="form-group">
-                      <label>Designation</label>
+                      <label>Academic Designation</label>
                       <input
                         placeholder="e.g. Associate Professor"
                         value={editDesignation}
@@ -1028,6 +1136,9 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                       />
                     </div>
                   </div>
+                  <small style={{ color: '#64748b', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                    Changing department automatically reassigns instructor teaching permissions to all courses in the new department.
+                  </small>
                 </div>
               )}
 
@@ -1099,28 +1210,44 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                   </select>
                 </div>
 
-                {bulkRole === 'student' ? (
-                  <div className="form-group">
-                    <label>Default Degree Programme (Optional)</label>
-                    <select value={bulkProgId} onChange={(e) => setBulkProgId(e.target.value)}>
-                      <option value="">— Select Programme (or specify per row) —</option>
-                      {programmes.map((p) => (
-                        <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                ) : (
-                  <div className="form-group">
-                    <label>Default Department (Optional)</label>
-                    <select value={bulkDeptId} onChange={(e) => setBulkDeptId(e.target.value)}>
-                      <option value="">— Select Department (or specify per row) —</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
+                <div className="form-group">
+                  <label>Default Department (Optional)</label>
+                  <select
+                    value={bulkDeptId}
+                    onChange={(e) => {
+                      const dId = e.target.value;
+                      setBulkDeptId(dId);
+                      const matching = getProgrammesForDepartment(dId);
+                      if (matching.length > 0) setBulkProgId(matching[0].id);
+                    }}
+                  >
+                    <option value="">— Select Department (or specify per row) —</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                    ))}
+                  </select>
+                </div>
               </div>
+
+              {bulkRole === 'student' && (
+                <div className="form-group" style={{ marginTop: '-4px' }}>
+                  <label>Default Degree Programme (Optional)</label>
+                  <select
+                    value={bulkProgId}
+                    onChange={(e) => {
+                      const pId = e.target.value;
+                      setBulkProgId(pId);
+                      const prog = programmes.find((p) => p.id === pId);
+                      if (prog && !bulkDeptId) setBulkDeptId(prog.department_id);
+                    }}
+                  >
+                    <option value="">— Select Programme (or specify per row) —</option>
+                    {getProgrammesForDepartment(bulkDeptId).map((p) => (
+                      <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               <div className="form-group">
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
@@ -1225,6 +1352,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
           setSelectedStudentUser(null);
         }}
         initialData={selectedStudentUser}
+        onEdit={(student) => openEditModal(student)}
       />
     </div>
   );

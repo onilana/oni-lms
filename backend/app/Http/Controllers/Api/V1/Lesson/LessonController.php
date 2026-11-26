@@ -9,19 +9,15 @@ use App\Models\Lesson;
 use App\Models\Role;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 
 class LessonController
 {
     public function index(Request $request, CourseSection $section): JsonResponse
     {
-        $user = $request->user();
-        if ($user && !$user->isInstitutionAdmin() && $user->hasRole(['hod', 'dept_admin', 'teacher'])) {
-            $assignedDeptId = $user->getAssignedDepartmentId();
-            $course = $section->course;
-            $isInstructor = $course?->instructors()->where('user_id', $user->id)->exists();
-            if ($course && $course->department_id !== $assignedDeptId && !$isInstructor) {
-                abort(403, 'Access denied. You do not have permission to view lesson curriculum outside your assigned department.');
-            }
+        if ($section->course) {
+            Gate::authorize('viewSection', [Lesson::class, $section->course]);
         }
 
         $lessons = Lesson::where('section_id', $section->id)
@@ -82,12 +78,7 @@ class LessonController
 
     public function destroy(Request $request, Lesson $lesson): JsonResponse
     {
-        $user = $request->user();
-        if (
-            ! $lesson->course->isTaughtBy($user)
-            && ! $user->isSuperAdmin()
-            && ! ($user->hasPermission('lessons.manage') && ! $user->hasRole(Role::TEACHER))
-        ) {
+        if (! Gate::allows('delete', $lesson)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -100,13 +91,15 @@ class LessonController
 
     public function access(Request $request, Lesson $lesson): JsonResponse
     {
-        $user = $request->user();
-
-        if (! $lesson->isAccessibleBy($user)) {
+        if (! Gate::allows('access', $lesson)) {
             return response()->json([
                 'message' => 'Forbidden: You must be enrolled in this course to access this lesson content.',
             ], 403);
         }
+
+        $attachmentUrl = $lesson->attachment_path
+            ? (str_starts_with($lesson->attachment_path, 'http') ? $lesson->attachment_path : asset(ltrim($lesson->attachment_path, '/')))
+            : null;
 
         return response()->json([
             'lesson_id' => $lesson->id,
@@ -114,9 +107,40 @@ class LessonController
             'type' => $lesson->type,
             'content' => $lesson->content,
             'stream_url' => $lesson->video_url,
-            'attachment_url' => $lesson->attachment_path,
+            'attachment_url' => $attachmentUrl,
+            'attachment_path' => $lesson->attachment_path,
             'attachment_name' => $lesson->attachment_name,
             'is_free_preview' => $lesson->is_free_preview,
         ]);
+    }
+
+    public function uploadAttachment(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (! $user || (! $user->isSuperAdmin() && ! $user->hasRole(['teacher', 'hod', 'dept_admin', 'college_admin']) && ! $user->hasPermission('lessons.manage') && ! $user->hasPermission('courses.update'))) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        $request->validate([
+            'file' => ['required', 'file', 'max:25600'],
+        ]);
+
+        $file = $request->file('file');
+        $originalName = $file->getClientOriginalName();
+        $extension = strtolower($file->getClientOriginalExtension());
+
+        $safeName = Str::slug(pathinfo($originalName, PATHINFO_FILENAME));
+        $filename = time() . '_' . ($safeName ?: 'material') . '.' . ($extension ?: 'bin');
+        $path = $file->storeAs('lesson-materials', $filename, 'public');
+
+        $relativeUrl = '/storage/' . $path;
+
+        return response()->json([
+            'message' => 'Attachment uploaded successfully.',
+            'attachment_path' => $relativeUrl,
+            'attachment_url' => asset('storage/' . $path),
+            'attachment_name' => $originalName,
+            'extension' => $extension,
+        ], 201);
     }
 }

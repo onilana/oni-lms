@@ -224,4 +224,75 @@ class CourseTest extends TestCase
 
         $response->assertStatus(403);
     }
+
+    public function test_student_cannot_view_enrolments_or_unenroll_another_student(): void
+    {
+        $course = Course::where('code', 'CS101')->first();
+        $session = AcademicSession::where('is_current', true)->first();
+
+        $otherStudentRole = Role::where('name', Role::STUDENT)->first();
+        $otherStudent = User::create([
+            'name' => 'Ada Lovelace',
+            'email' => 'ada@student.onilms.edu',
+            'password' => Hash::make('Student123!'),
+            'status' => 'active',
+        ]);
+        $otherStudent->roles()->attach($otherStudentRole->id);
+        $otherToken = $otherStudent->createToken('other-student')->plainTextToken;
+
+        $this->withHeader('Authorization', 'Bearer '.$this->studentToken)
+            ->postJson('/api/v1/courses/'.$course->id.'/enroll', [
+                'academic_session_id' => $session->id,
+            ])->assertStatus(201);
+
+        $this->app['auth']->forgetGuards();
+
+        // Another student cannot list enrolments or unenroll the enrolled student
+        $this->withHeader('Authorization', 'Bearer '.$otherToken)
+            ->getJson('/api/v1/courses/'.$course->id.'/enrolments')
+            ->assertStatus(403);
+
+        $this->withHeader('Authorization', 'Bearer '.$otherToken)
+            ->deleteJson('/api/v1/courses/'.$course->id.'/enrolments/'.$this->student->id)
+            ->assertStatus(403);
+
+        $this->assertDatabaseHas('course_enrolments', [
+            'course_id' => $course->id,
+            'user_id' => $this->student->id,
+        ]);
+
+        $this->app['auth']->forgetGuards();
+
+        // Enrolled student can unenroll themselves
+        $this->withHeader('Authorization', 'Bearer '.$this->studentToken)
+            ->deleteJson('/api/v1/courses/'.$course->id.'/enrolments/'.$this->student->id)
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('course_enrolments', [
+            'course_id' => $course->id,
+            'user_id' => $this->student->id,
+        ]);
+    }
+
+    public function test_admin_can_unenroll_student(): void
+    {
+        $course = Course::where('code', 'CS101')->first();
+        $session = AcademicSession::where('is_current', true)->first();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->studentToken)
+            ->postJson('/api/v1/courses/'.$course->id.'/enroll', [
+                'academic_session_id' => $session->id,
+            ])->assertStatus(201);
+
+        $this->app['auth']->forgetGuards();
+
+        $this->withHeader('Authorization', 'Bearer '.$this->adminToken)
+            ->deleteJson('/api/v1/courses/'.$course->id.'/enrolments/'.$this->student->id)
+            ->assertStatus(200);
+
+        $this->assertDatabaseMissing('course_enrolments', [
+            'course_id' => $course->id,
+            'user_id' => $this->student->id,
+        ]);
+    }
 }

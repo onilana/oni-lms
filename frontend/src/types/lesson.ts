@@ -1,3 +1,5 @@
+export type LessonType = 'text' | 'video' | 'pdf' | 'doc' | 'word' | 'excel' | 'spreadsheet' | 'link' | 'embed';
+
 export interface LessonProgress {
   is_completed: boolean;
   completed_at?: string;
@@ -9,11 +11,12 @@ export interface Lesson {
   course_id: string;
   section_id: string;
   title: string;
-  type: 'text' | 'video' | 'pdf' | 'embed';
+  type: LessonType;
   content?: string | null;
   video_url?: string | null;
   video_duration_seconds?: number | null;
   attachment_path?: string | null;
+  attachment_url?: string | null;
   attachment_name?: string | null;
   order_index: number;
   is_free_preview: boolean;

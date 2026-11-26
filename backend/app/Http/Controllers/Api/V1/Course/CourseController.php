@@ -12,6 +12,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class CourseController
 {
@@ -93,16 +94,7 @@ class CourseController
 
     public function show(Request $request, Course $course): JsonResponse
     {
-        $user = $request->user();
-
-        // Enforce department access control for HoD, Dept Admin, and Teachers
-        if ($user && !$user->isInstitutionAdmin() && $user->hasRole([Role::HOD, Role::DEPT_ADMIN, Role::TEACHER])) {
-            $assignedDeptId = $user->getAssignedDepartmentId();
-            $isInstructor = $course->instructors()->where('user_id', $user->id)->exists();
-            if ($course->department_id !== $assignedDeptId && !$isInstructor) {
-                abort(403, 'Access denied. You do not have permission to view course layout or resources under another department.');
-            }
-        }
+        Gate::authorize('view', $course);
 
         $course->load(['department', 'programme', 'creator', 'instructors.user', 'enrolments'])
             ->loadCount('enrolments');

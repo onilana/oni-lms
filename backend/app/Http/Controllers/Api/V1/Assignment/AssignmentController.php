@@ -9,6 +9,7 @@ use App\Models\Course;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class AssignmentController
 {
@@ -71,7 +72,7 @@ class AssignmentController
 
     public function show(Request $request, Assignment $assignment): JsonResponse
     {
-        if ($assignment->status !== 'published' && ! $this->canManageCourse($assignment->course, $request->user())) {
+        if (! Gate::allows('view', $assignment)) {
             abort(404);
         }
 
@@ -107,7 +108,7 @@ class AssignmentController
 
     public function destroy(Request $request, Assignment $assignment): JsonResponse
     {
-        if (! $this->canManage($assignment, $request->user())) {
+        if (! Gate::allows('delete', $assignment)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -116,23 +117,5 @@ class AssignmentController
         return response()->json([
             'message' => 'Assignment deleted successfully.',
         ]);
-    }
-
-    private function canManageCourse(Course $course, ?User $user): bool
-    {
-        if (! $user) {
-            return false;
-        }
-
-        return $course->isTaughtBy($user)
-            || $user->isSuperAdmin()
-            || ($user->hasPermission('assignments.manage') && ! $user->hasRole('teacher'));
-    }
-
-    private function canManage(Assignment $assignment, User $user): bool
-    {
-        return $assignment->course->isTaughtBy($user)
-            || $user->isSuperAdmin()
-            || $user->hasPermission('assignments.delete');
     }
 }

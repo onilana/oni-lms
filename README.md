@@ -1,17 +1,17 @@
-# ONI LMS — Starter Project
+# ONI LMS
 
-A clean starter foundation for the ONI Learning Management System. This is the beginning of the application, **not the complete LMS**. It includes a React + TypeScript frontend, Laravel API foundation, PostgreSQL, Redis, and Docker/Nginx development setup.
+ONI Learning Management System — a full-stack academic LMS built with React + TypeScript + Vite (`frontend/`) and Laravel 12 (`backend/`), backed by PostgreSQL, Redis, and Nginx.
 
 ## Architecture
 
 - `frontend/` — React + TypeScript + Vite
-- `backend/` — Laravel 12 API application
+- `backend/` — Laravel 12 API application (`/api/v1`)
 - PostgreSQL — primary relational database
 - Redis — cache/queue backend
 - Nginx — API reverse proxy
 - Docker Compose — local development services
 
-The LMS is independent of the existing `oni_lana` WordPress website. Do not connect the two databases. WordPress integration and SSO are later phases.
+The LMS is independent of the `oni_lana` WordPress website and uses separate databases with signed HMAC-SHA256 SSO assertions.
 
 ## Requirements
 
@@ -21,20 +21,28 @@ Install Docker Desktop (or Docker Engine + Compose) and Git.
 
 From this directory:
 
+1. Create the root `.env` file and configure secure secrets (`APP_KEY`, `DB_PASSWORD`, `INITIAL_ADMIN_PASSWORD`, `WORDPRESS_WEBHOOK_SECRET`):
+
+```bash
+cp .env.example .env
+docker compose config
+```
+
+2. Build and start the services:
+
 ```bash
 docker compose up --build
 ```
-
-First startup may take several minutes while Composer and npm install dependencies.
 
 Open:
 - Frontend: http://localhost:5173
 - API health check: http://localhost:8080/api/v1/health
 
-To run Laravel migrations:
+3. Run Laravel migrations and initial role/admin seeding explicitly:
 
 ```bash
 docker compose exec backend php artisan migrate
+docker compose exec backend php artisan db:seed --class=RoleAndPermissionSeeder
 ```
 
 To generate an application key if one is not already present:
@@ -87,22 +95,19 @@ oni-lms/
 
 ## Current implementation status
 
-Included:
+Implemented modules:
 - Docker Compose services for frontend, Laravel/PHP-FPM, Nginx, PostgreSQL, and Redis
-- Laravel API health endpoint
-- PostgreSQL connection configuration
-- Redis cache/queue configuration
-- React dashboard starter with API health indicator
-- Initial users migration
+- Authentication & RBAC (Sanctum, roles, permissions, Student/Teacher/Department/Admin dashboards)
+- Academic management (departments, programmes, sessions, semesters, batches)
+- Courses, enrolments, sections, lessons, and learning content
+- Assignments, submissions, grading, examinations, and question bank
+- Attendance, certificates, live sessions, announcements, and notifications
+- Analytics, AI assistant, WordPress integration/SSO, audit logs, and database backups
 
-Not yet implemented:
-- Login, registration, password reset, role-based access control
-- Departments, programmes, semesters, batches, courses and enrolments
-- Lessons, video delivery, assignments, examinations and grading
-- Attendance, certificates, live classes and analytics
-- AI assistant / permission-aware document retrieval
-- WordPress integration / SSO
-- Production deployment, backups, monitoring and security hardening
+Remaining production hardening:
+- HttpOnly cookie-based SPA session auth (replacing `localStorage` bearer tokens)
+- Production Docker/HTTPS/monitoring deployment configuration and off-site encrypted backup storage
+- Broad negative authorization testing and policy centralization across all endpoints
 
 ## Development rules
 

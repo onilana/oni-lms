@@ -8,9 +8,14 @@ node_modules/
 dist/
 build/
 .phpunit.cache/
+.phpunit.result.cache
 *.tsbuildinfo
 
 # Laravel storage & cache
+backend/public/storage
+**/public/storage
+backend/storage/app/backups/
+backend/storage/framework/testing/
 storage/*.key
 storage/framework/cache/*
 storage/framework/sessions/*

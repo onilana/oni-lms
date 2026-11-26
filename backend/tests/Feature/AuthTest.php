@@ -163,4 +163,58 @@ class AuthTest extends TestCase
 
         $this->assertTrue(Hash::check('NewSecurePassword2026!', $user->fresh()->password));
     }
+
+    public function test_stateful_spa_cookie_login_and_logout(): void
+    {
+        $this->withHeader('Referer', 'http://localhost:5173')
+            ->getJson('/sanctum/csrf-cookie')
+            ->assertStatus(204);
+
+        $loginResponse = $this->withHeader('Referer', 'http://localhost:5173')
+            ->postJson('/api/v1/auth/login', [
+                'email' => 'admin@onilms.edu',
+                'password' => 'OniAdmin@2026!',
+                'device_name' => 'browser',
+            ]);
+
+        $loginResponse->assertStatus(200)
+            ->assertJsonPath('user.email', 'admin@onilms.edu');
+
+        $this->withHeader('Referer', 'http://localhost:5173')
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(200)
+            ->assertJsonPath('user.email', 'admin@onilms.edu');
+
+        $this->withHeader('Referer', 'http://localhost:5173')
+            ->postJson('/api/v1/auth/logout')
+            ->assertStatus(200)
+            ->assertJson(['message' => 'Successfully logged out.']);
+    }
+
+    public function test_must_change_password_is_flagged_on_login_and_cleared_on_password_change(): void
+    {
+        $user = User::where('email', 'admin@onilms.edu')->first();
+        $user->forceFill(['must_change_password' => true])->save();
+
+        $loginResponse = $this->postJson('/api/v1/auth/login', [
+            'email' => 'admin@onilms.edu',
+            'password' => 'OniAdmin@2026!',
+        ]);
+
+        $loginResponse->assertStatus(200)
+            ->assertJsonPath('must_change_password', true)
+            ->assertJsonPath('user.must_change_password', true);
+
+        $token = $loginResponse->json('token');
+
+        $this->withHeader('Authorization', 'Bearer ' . $token)
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => 'OniAdmin@2026!',
+                'new_password' => 'RotatedAdmin@2026!',
+                'new_password_confirmation' => 'RotatedAdmin@2026!',
+            ])
+            ->assertStatus(200);
+
+        $this->assertFalse((bool) $user->fresh()->must_change_password);
+    }
 }

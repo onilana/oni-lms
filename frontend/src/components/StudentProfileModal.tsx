@@ -6,6 +6,7 @@ import {
   Calendar,
   CheckCircle,
   Clock,
+  Edit2,
   GraduationCap,
   Mail,
   MapPin,
@@ -22,6 +23,7 @@ interface StudentProfileModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialData?: User | null;
+  onEdit?: (student: User) => void;
 }
 
 export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
@@ -29,6 +31,7 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
   isOpen,
   onClose,
   initialData,
+  onEdit,
 }) => {
   const [student, setStudent] = useState<User | null>(initialData || null);
   const [loading, setLoading] = useState(false);
@@ -339,8 +342,21 @@ export const StudentProfileModal: React.FC<StudentProfileModalProps> = ({
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '24px', borderTop: '1px solid var(--border)', paddingTop: '16px', gap: '10px' }}>
+          {onEdit && student && (
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              onClick={() => {
+                onClose();
+                onEdit(student);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+            >
+              <Edit2 size={13} /> Edit Programme &amp; Department (Admin / HoD)
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={onClose} style={{ marginLeft: onEdit && student ? undefined : 'auto' }}>
             Close Profile
           </button>
         </div>

@@ -83,6 +83,12 @@ class AuditAndBackupTest extends TestCase
 
         $listResponse->assertStatus(200)
             ->assertJsonStructure(['database_engine', 'automated_schedule', 'data']);
+
+        $filename = $createResponse->json('backup.filename');
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson("/api/v1/backups/{$filename}/verify")
+            ->assertStatus(200)
+            ->assertJsonPath('verification.is_valid', true);
     }
 
     public function test_student_cannot_manage_backups(): void
@@ -91,5 +97,23 @@ class AuditAndBackupTest extends TestCase
             ->postJson('/api/v1/backups');
 
         $response->assertStatus(403);
+    }
+
+    public function test_pgsql_backup_fails_without_placeholder_when_pg_dump_unavailable(): void
+    {
+        $originalDefault = config('database.default');
+        config([
+            'database.default' => 'pgsql',
+            'database.connections.pgsql.database' => '',
+            'database.connections.pgsql.username' => '',
+        ]);
+
+        try {
+            $this->expectException(\RuntimeException::class);
+            $this->expectExceptionMessage('PostgreSQL connection credentials are incomplete.');
+            app(\App\Services\BackupService::class)->createBackup();
+        } finally {
+            config(['database.default' => $originalDefault]);
+        }
     }
 }

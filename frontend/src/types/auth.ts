@@ -43,6 +43,7 @@ export interface User {
   name: string;
   email: string;
   status: string;
+  must_change_password?: boolean;
   email_verified_at?: string;
   last_login_at?: string;
   roles: Role[];

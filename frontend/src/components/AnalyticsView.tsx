@@ -18,7 +18,7 @@ import {
   Search,
   Filter
 } from 'lucide-react';
-import { apiRequest } from '../api/client';
+import { apiDownload, apiRequest } from '../api/client';
 import { StudentAnalytics, CourseAnalytics, AdminAnalytics } from '../types/analytics';
 import { Course } from '../types/course';
 import { User as AuthUser } from '../types/auth';
@@ -120,25 +120,8 @@ export const AnalyticsView: React.FC<AnalyticsViewProps> = ({ currentUser, cours
   };
 
   const handleExportCsv = (courseId: string) => {
-    const token = localStorage.getItem('oni_lms_token');
-    const url = `http://127.0.0.1:8000/api/v1/analytics/export/csv?course_id=${courseId}`;
-    
-    // Trigger browser download via anchor or fetch
-    fetch(url, {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    })
-      .then(res => res.blob())
-      .then(blob => {
-        const downloadUrl = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = `Course_Analytics_Report_${new Date().toISOString().split('T')[0]}.csv`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
-      })
+    const filename = `Course_Analytics_Report_${new Date().toISOString().split('T')[0]}.csv`;
+    apiDownload(`/analytics/export/csv?course_id=${courseId}`, filename)
       .catch(() => alert('Failed to download CSV export.'));
   };
 

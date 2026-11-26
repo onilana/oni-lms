@@ -32,7 +32,7 @@ class LessonRequest extends FormRequest
     {
         return [
             'title' => ['required', 'string', 'max:255'],
-            'type' => ['required', 'string', 'in:text,video,pdf,embed'],
+            'type' => ['required', 'string', 'in:text,video,pdf,doc,word,excel,spreadsheet,link,embed'],
             'content' => ['nullable', 'string'],
             'video_url' => ['nullable', 'string', 'max:500'],
             'video_duration_seconds' => ['nullable', 'integer', 'min:0'],

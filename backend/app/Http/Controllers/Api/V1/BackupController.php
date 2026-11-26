@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Models\Role;
 use App\Services\AuditService;
+use App\Services\BackupService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\File;
@@ -13,12 +13,9 @@ class BackupController
 {
     private string $backupDir;
 
-    public function __construct()
+    public function __construct(private readonly BackupService $backupService)
     {
-        $this->backupDir = storage_path('app/backups');
-        if (!File::exists($this->backupDir)) {
-            File::makeDirectory($this->backupDir, 0755, true);
-        }
+        $this->backupDir = $this->backupService->getBackupDirectory();
     }
 
     private function authorizeAdmin(Request $request): void
@@ -62,39 +59,33 @@ class BackupController
     {
         $this->authorizeAdmin($request);
 
-        $dbDefault = config('database.default');
-        $timestamp = date('Y-m-d_His');
-        $filename = "oni_lms_backup_{$dbDefault}_{$timestamp}.sqlite";
-        $targetPath = $this->backupDir . DIRECTORY_SEPARATOR . $filename;
+        try {
+            $backup = $this->backupService->createBackup();
+        } catch (\Throwable $e) {
+            AuditService::log(
+                action: 'system.backup_failed',
+                user: $request->user(),
+                auditableType: 'SystemBackup',
+                newValues: ['error' => $e->getMessage()],
+                request: $request
+            );
 
-        // Take snapshot of database
-        $dbPath = config('database.connections.sqlite.database');
-        if ($dbPath && File::exists($dbPath)) {
-            File::copy($dbPath, $targetPath);
-        } else {
-            // Write structured export placeholder
-            File::put($targetPath, "-- ONI LMS Snapshot --\n-- Engine: {$dbDefault} --\n-- Date: " . now()->toIso8601String() . " --\n");
+            return response()->json([
+                'message' => 'Database backup failed: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $fileSize = File::size($targetPath);
 
         AuditService::log(
             action: 'system.backup_created',
             user: $request->user(),
             auditableType: 'SystemBackup',
-            newValues: ['filename' => $filename, 'size' => $fileSize],
+            newValues: ['filename' => $backup['filename'], 'size' => $backup['size_bytes']],
             request: $request
         );
 
         return response()->json([
             'message' => 'Database snapshot created successfully.',
-            'backup' => [
-                'filename' => $filename,
-                'size_bytes' => $fileSize,
-                'size_human' => round($fileSize / 1024 / 1024, 2) . ' MB',
-                'created_at' => now()->toISOString(),
-                'sha256' => hash_file('sha256', $targetPath),
-            ],
+            'backup' => $backup,
         ], 201);
     }
 
@@ -111,5 +102,21 @@ class BackupController
         }
 
         return response()->download($path, $safeFilename);
+    }
+
+    public function verify(string $filename, Request $request): JsonResponse
+    {
+        $this->authorizeAdmin($request);
+
+        try {
+            $result = $this->backupService->verifyBackup($filename);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 404);
+        }
+
+        return response()->json([
+            'message' => $result['is_valid'] ? 'Backup integrity verified.' : 'Backup integrity check failed.',
+            'verification' => $result,
+        ], $result['is_valid'] ? 200 : 422);
     }
 }

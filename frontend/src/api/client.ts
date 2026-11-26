@@ -1,6 +1,22 @@
 import { normalizeAnswerSnapshot } from '../types/exam';
 
-const API_BASE_URL = '/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
+function getCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie
+    .split('; ')
+    .find((row) => row.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.split('=').slice(1).join('=')) : null;
+}
+
+export async function ensureCsrfCookie(): Promise<void> {
+  await fetch('/sanctum/csrf-cookie', {
+    method: 'GET',
+    credentials: 'include',
+    headers: { Accept: 'application/json' },
+  });
+}
 
 function normalizeAttemptAnswerSnapshots(value: unknown): unknown {
   if (Array.isArray(value)) {
@@ -33,8 +49,6 @@ export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const token = localStorage.getItem('oni_lms_token');
-
   const headers = new Headers(options.headers);
   headers.set('Accept', 'application/json');
   if (typeof FormData !== 'undefined' && options.body instanceof FormData) {
@@ -43,14 +57,19 @@ export async function apiRequest<T>(
     headers.set('Content-Type', 'application/json');
   }
 
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
+  const method = (options.method || 'GET').toUpperCase();
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method)) {
+    const xsrfToken = getCookie('XSRF-TOKEN');
+    if (xsrfToken) {
+      headers.set('X-XSRF-TOKEN', xsrfToken);
+    }
   }
 
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
 
   const response = await fetch(url, {
     ...options,
+    credentials: 'include',
     headers,
   });
 
@@ -65,14 +84,10 @@ export async function apiRequest<T>(
 }
 
 export async function apiDownload(endpoint: string, filename: string): Promise<void> {
-  const token = localStorage.getItem('oni_lms_token');
   const headers = new Headers({ Accept: 'application/octet-stream' });
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
 
   const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint.startsWith('/') ? '' : '/'}${endpoint}`;
-  const response = await fetch(url, { headers });
+  const response = await fetch(url, { credentials: 'include', headers });
   if (!response.ok) {
     const data = await response.json().catch(() => null);
     throw new ApiError(

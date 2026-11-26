@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, KeyRound, Lock, Mail, ShieldAlert, Sparkles, X } from 'lucide-react';
+import { Eye, EyeOff, KeyRound, Lock, Mail, ShieldAlert, X } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { ApiError } from '../api/client';
 
@@ -10,8 +10,8 @@ interface LoginModalProps {
 
 export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
   const { login } = useAuth();
-  const [email, setEmail] = useState('admin@onilms.edu');
-  const [password, setPassword] = useState('OniAdmin@2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,12 +35,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const setPreset = (presetEmail: string, presetPass: string) => {
-    setEmail(presetEmail);
-    setPassword(presetPass);
-    setError(null);
   };
 
   return (
@@ -107,28 +101,6 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
             <KeyRound size={16} />
             <span>{loading ? 'Authenticating...' : 'Sign In'}</span>
           </button>
-
-          <div className="dev-presets">
-            <span className="dev-presets-label">
-              <Sparkles size={13} /> Quick Test Credentials (1-Click Fill)
-            </span>
-            <div className="preset-buttons">
-              <button
-                type="button"
-                className="btn-chip"
-                onClick={() => setPreset('admin@onilms.edu', 'OniAdmin@2026!')}
-              >
-                Super Admin
-              </button>
-              <button
-                type="button"
-                className="btn-chip"
-                onClick={() => setPreset('student@onilms.edu', 'OniStudent@2026!')}
-              >
-                Student (Aarav)
-              </button>
-            </div>
-          </div>
         </form>
       </div>
     </div>

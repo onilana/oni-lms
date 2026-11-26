@@ -19,7 +19,7 @@ services:
     build:
       context: ./backend
     working_dir: /var/www/html
-    command: sh -c "sed -i 's/pm.max_children = 5/pm.max_children = 25/g' /usr/local/etc/php-fpm.d/www.conf && php artisan migrate --force && php-fpm -F"
+    command: sh -c "sed -i 's/pm.max_children = 5/pm.max_children = 25/g' /usr/local/etc/php-fpm.d/www.conf && php-fpm -F"
     volumes:
       - ./backend:/var/www/html
     env_file:

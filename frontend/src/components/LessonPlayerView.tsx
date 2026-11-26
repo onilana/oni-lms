@@ -1,21 +1,29 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
+  AlertCircle,
   ArrowLeft,
   CheckCircle2,
   Circle,
   Download,
+  Edit2,
+  ExternalLink,
+  FileSpreadsheet,
   FileText,
+  Link2,
   Lock,
   PlayCircle,
   Plus,
   RefreshCw,
+  Trash2,
+  UploadCloud,
   Video,
   X
 } from 'lucide-react';
 import { apiRequest, ApiError } from '../api/client';
 import type { Course } from '../types/course';
-import type { CourseProgress, CourseSection, Lesson } from '../types/lesson';
+import type { CourseProgress, CourseSection, Lesson, LessonType } from '../types/lesson';
 import { useAuth } from '../context/AuthContext';
+import { DocumentViewer } from './DocumentViewer';
 
 interface LessonPlayerViewProps {
   courseId: string;
@@ -24,7 +32,7 @@ interface LessonPlayerViewProps {
 
 export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, onBack }) => {
   const { user, hasPermission, hasRole } = useAuth();
-  const canManage = hasPermission('lessons.manage') || hasRole('teacher') || hasRole('super_admin');
+  const canManage = hasPermission('lessons.manage') || hasRole('teacher') || hasRole('super_admin') || hasRole('college_admin') || hasRole('hod');
 
   const [course, setCourse] = useState<Course | null>(null);
   const [sections, setSections] = useState<CourseSection[]>([]);
@@ -34,20 +42,28 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // New section / lesson modals
+  // New section modal
   const [isSectionModalOpen, setIsSectionModalOpen] = useState(false);
   const [newSectionTitle, setNewSectionTitle] = useState('');
   const [newSectionDesc, setNewSectionDesc] = useState('');
 
+  // Lesson Create / Edit modal
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [targetSectionId, setTargetSectionId] = useState('');
-  const [newLessonTitle, setNewLessonTitle] = useState('');
-  const [newLessonType, setNewLessonType] = useState<'text' | 'video' | 'pdf'>('text');
-  const [newLessonContent, setNewLessonContent] = useState('');
-  const [newLessonVideo, setNewLessonVideo] = useState('');
-  const [newLessonAttachmentPath, setNewLessonAttachmentPath] = useState('');
-  const [newLessonAttachmentName, setNewLessonAttachmentName] = useState('');
-  const [newLessonPreview, setNewLessonPreview] = useState(false);
+  const [lessonTitle, setLessonTitle] = useState('');
+  const [lessonType, setLessonType] = useState<LessonType>('text');
+  const [lessonContent, setLessonContent] = useState('');
+  const [lessonVideo, setLessonVideo] = useState('');
+  const [lessonAttachmentPath, setLessonAttachmentPath] = useState('');
+  const [lessonAttachmentName, setLessonAttachmentName] = useState('');
+  const [lessonPreview, setLessonPreview] = useState(false);
+
+  // File Upload State
+  const [uploading, setUploading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const courseIdRef = useRef(courseId);
   courseIdRef.current = courseId;
   const courseLoadIdRef = useRef(0);
@@ -224,32 +240,152 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
     }
   };
 
-  const handleCreateLesson = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await apiRequest(`/sections/${targetSectionId}/lessons`, {
-        method: 'POST',
-        body: JSON.stringify({
-          title: newLessonTitle,
-          type: newLessonType,
-          content: newLessonContent,
-          video_url: newLessonVideo || undefined,
-          attachment_path: newLessonType === 'pdf' ? newLessonAttachmentPath.trim() || undefined : undefined,
-          attachment_name: newLessonType === 'pdf' ? newLessonAttachmentName.trim() || undefined : undefined,
-          is_free_preview: newLessonPreview,
-          status: 'published',
-        }),
-      });
+  const openCreateLessonModal = (sectionId?: string) => {
+    setEditingLessonId(null);
+    setTargetSectionId(sectionId || (sections[0]?.id ?? ''));
+    setLessonTitle('');
+    setLessonType('text');
+    setLessonContent('');
+    setLessonVideo('');
+    setLessonAttachmentPath('');
+    setLessonAttachmentName('');
+    setLessonPreview(false);
+    setUploadStatus(null);
+    setIsLessonModalOpen(true);
+  };
 
-      setIsLessonModalOpen(false);
-      setNewLessonTitle('');
-      setNewLessonContent('');
-      setNewLessonVideo('');
-      setNewLessonAttachmentPath('');
-      setNewLessonAttachmentName('');
+  const openEditLessonModal = (lesson: Lesson) => {
+    setEditingLessonId(lesson.id);
+    setTargetSectionId(lesson.section_id);
+    setLessonTitle(lesson.title);
+    setLessonType(lesson.type);
+    setLessonContent(lesson.content || '');
+    setLessonVideo(lesson.video_url || '');
+    setLessonAttachmentPath(lesson.attachment_path || '');
+    setLessonAttachmentName(lesson.attachment_name || '');
+    setLessonPreview(lesson.is_free_preview);
+    setUploadStatus(null);
+    setIsLessonModalOpen(true);
+  };
+
+  const handleDeleteLesson = async (lesson: Lesson) => {
+    if (!window.confirm(`Are you sure you want to delete lesson "${lesson.title}"?`)) {
+      return;
+    }
+
+    try {
+      await apiRequest(`/lessons/${lesson.id}`, {
+        method: 'DELETE',
+      });
+      if (activeLesson?.id === lesson.id) {
+        setActiveLesson(null);
+      }
       await fetchCourseData();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Error creating lesson');
+      alert(err instanceof Error ? err.message : 'Error deleting lesson');
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadStatus(`Uploading ${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)...`);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await apiRequest<{
+        message: string;
+        attachment_path: string;
+        attachment_url: string;
+        attachment_name: string;
+        extension: string;
+      }>('/lessons/upload-attachment', {
+        method: 'POST',
+        body: formData,
+      });
+
+      setLessonAttachmentPath(res.attachment_path);
+      setLessonAttachmentName(res.attachment_name);
+
+      const ext = res.extension.toLowerCase();
+      if (ext === 'pdf') {
+        setLessonType('pdf');
+      } else if (['doc', 'docx'].includes(ext)) {
+        setLessonType('doc');
+      } else if (['xls', 'xlsx', 'csv'].includes(ext)) {
+        setLessonType('excel');
+      } else if (['mp4', 'webm', 'mov', 'm4v'].includes(ext)) {
+        setLessonType('video');
+        setLessonVideo(res.attachment_url || res.attachment_path);
+      }
+
+      setUploadStatus(`Uploaded: ${res.attachment_name}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error uploading file');
+      setUploadStatus(null);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const handleSaveLesson = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const payload: Record<string, any> = {
+        title: lessonTitle,
+        type: lessonType,
+        content: lessonContent || undefined,
+        video_url: lessonVideo.trim() || undefined,
+        attachment_path: lessonAttachmentPath.trim() || undefined,
+        attachment_name: lessonAttachmentName.trim() || undefined,
+        is_free_preview: lessonPreview,
+        status: 'published',
+      };
+
+      if (editingLessonId) {
+        await apiRequest(`/lessons/${editingLessonId}`, {
+          method: 'PUT',
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiRequest(`/sections/${targetSectionId}/lessons`, {
+          method: 'POST',
+          body: JSON.stringify(payload),
+        });
+      }
+
+      setIsLessonModalOpen(false);
+      setEditingLessonId(null);
+      await fetchCourseData();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Error saving lesson');
+    }
+  };
+
+  const getLessonTypeIcon = (type: LessonType) => {
+    switch (type) {
+      case 'video':
+        return <Video size={14} className="text-primary" />;
+      case 'pdf':
+        return <FileText size={14} className="text-danger" />;
+      case 'doc':
+      case 'word':
+        return <FileText size={14} className="text-primary" />;
+      case 'excel':
+      case 'spreadsheet':
+        return <FileSpreadsheet size={14} className="text-success" />;
+      case 'link':
+      case 'embed':
+        return <ExternalLink size={14} className="text-info" />;
+      default:
+        return <FileText size={14} />;
     }
   };
 
@@ -290,7 +426,7 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
               <div className="admin-actions">
                 <button
                   className="btn-icon"
-                  title="Add Section"
+                  title="Add Module Section"
                   onClick={() => setIsSectionModalOpen(true)}
                 >
                   <Plus size={15} />
@@ -305,6 +441,15 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                 <div className="section-title-row">
                   <span className="section-number">Unit {secIdx + 1}</span>
                   <h4>{section.title}</h4>
+                  {canManage && (
+                    <button
+                      className="btn-icon-tiny"
+                      title="Add Lesson to this Module"
+                      onClick={() => openCreateLessonModal(section.id)}
+                    >
+                      <Plus size={12} />
+                    </button>
+                  )}
                 </div>
 
                 <div className="lessons-list">
@@ -313,40 +458,66 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                     const isCompleted = lesson.progress?.is_completed ?? false;
 
                     return (
-                    <div key={lesson.id} className={`lesson-item ${isSelected ? 'active' : ''}`}>
-                      <button
-                        type="button"
-                        className="lesson-select"
-                        aria-current={isSelected ? 'true' : undefined}
-                        onClick={() => handleSelectLesson(lesson)}
-                      >
-                        <span className="lesson-type-icon">
-                          {lesson.type === 'video' && <Video size={14} />}
-                          {lesson.type === 'pdf' && <FileText size={14} />}
-                          {lesson.type === 'text' && <FileText size={14} />}
-                        </span>
-                        <span className="lesson-item-title">{lesson.title}</span>
-                      </button>
-                        {lesson.is_accessible && (
-                          <button
-                            type="button"
-                            className="btn-check"
-                            onClick={() => handleToggleComplete(lesson)}
-                            title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
-                          >
-                            {isCompleted ? (
-                              <CheckCircle2 size={16} className="icon-completed" />
-                            ) : (
-                              <Circle size={16} className="icon-pending" />
-                            )}
-                          </button>
-                        )}
-
-                        {!lesson.is_accessible && (
-                          <span title="Enroll to access" style={{ marginLeft: 'auto', display: 'grid' }}>
-                            <Lock size={13} className="icon-locked" />
+                      <div key={lesson.id} className={`lesson-item ${isSelected ? 'active' : ''}`}>
+                        <button
+                          type="button"
+                          className="lesson-select"
+                          aria-current={isSelected ? 'true' : undefined}
+                          onClick={() => handleSelectLesson(lesson)}
+                        >
+                          <span className="lesson-type-icon">
+                            {getLessonTypeIcon(lesson.type)}
                           </span>
-                        )}
+                          <span className="lesson-item-title">{lesson.title}</span>
+                        </button>
+
+                        <div className="lesson-item-actions">
+                          {canManage && (
+                            <>
+                              <button
+                                type="button"
+                                className="btn-icon-ghost"
+                                title="Edit Lesson"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openEditLessonModal(lesson);
+                                }}
+                              >
+                                <Edit2 size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                className="btn-icon-ghost text-danger"
+                                title="Delete Lesson"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteLesson(lesson);
+                                }}
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </>
+                          )}
+
+                          {lesson.is_accessible ? (
+                            <button
+                              type="button"
+                              className="btn-check"
+                              onClick={() => handleToggleComplete(lesson)}
+                              title={isCompleted ? 'Mark as incomplete' : 'Mark as complete'}
+                            >
+                              {isCompleted ? (
+                                <CheckCircle2 size={16} className="icon-completed" />
+                              ) : (
+                                <Circle size={16} className="icon-pending" />
+                              )}
+                            </button>
+                          ) : (
+                            <span title="Enroll to access" style={{ display: 'grid' }}>
+                              <Lock size={13} className="icon-locked" />
+                            </span>
+                          )}
+                        </div>
                       </div>
                     );
                   })}
@@ -358,7 +529,7 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
               <button
                 className="btn btn-secondary btn-block btn-sm"
                 style={{ marginTop: '12px' }}
-                onClick={() => setIsLessonModalOpen(true)}
+                onClick={() => openCreateLessonModal()}
               >
                 <Plus size={14} /> Add Lesson
               </button>
@@ -366,27 +537,43 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
           </div>
         </aside>
 
-        {/* Right Main Pane: Lesson Content & Player */}
+        {/* Right Main Pane: Lesson Content & Document Viewer */}
         <main className="player-content-pane">
           {activeLesson ? (
             <div className="lesson-content-card">
               <div className="lesson-header-row">
                 <div>
-                  <span className="lesson-type-badge">{activeLesson.type.toUpperCase()} LESSON</span>
+                  <div className="lesson-tag-line">
+                    <span className="lesson-type-badge">{activeLesson.type.toUpperCase()} LESSON</span>
+                    {activeLesson.is_free_preview && (
+                      <span className="badge-preview">FREE PREVIEW</span>
+                    )}
+                  </div>
                   <h2>{activeLesson.title}</h2>
                 </div>
 
-                {activeLesson.is_accessible && (
-                  <button
-                    className={`btn ${activeLesson.progress?.is_completed ? 'btn-secondary' : 'btn-primary'}`}
-                    onClick={() => handleToggleComplete(activeLesson)}
-                  >
-                    <CheckCircle2 size={16} />
-                    <span>
-                      {activeLesson.progress?.is_completed ? 'Completed ✓' : 'Mark as Completed'}
-                    </span>
-                  </button>
-                )}
+                <div className="lesson-top-controls">
+                  {canManage && (
+                    <button
+                      className="btn btn-secondary btn-sm"
+                      onClick={() => openEditLessonModal(activeLesson)}
+                    >
+                      <Edit2 size={14} /> Edit
+                    </button>
+                  )}
+
+                  {activeLesson.is_accessible && (
+                    <button
+                      className={`btn ${activeLesson.progress?.is_completed ? 'btn-secondary' : 'btn-primary'} btn-sm`}
+                      onClick={() => handleToggleComplete(activeLesson)}
+                    >
+                      <CheckCircle2 size={16} />
+                      <span>
+                        {activeLesson.progress?.is_completed ? 'Completed ✓' : 'Mark as Completed'}
+                      </span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {!activeLesson.is_accessible ? (
@@ -397,64 +584,35 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                 </div>
               ) : (
                 <div className="lesson-render-area">
-                  {/* Video Lesson */}
-                  {activeLesson.type === 'video' && (
-                    <div className="video-player-container">
-                      {activeLesson.video_url ? (
-                        <video
-                          controls
-                          className="html5-video"
-                          src={activeLesson.video_url}
-                          key={activeLesson.video_url}
-                        >
-                          Your browser does not support the video tag.
-                        </video>
-                      ) : (
-                        <div className="video-placeholder">
-                          <PlayCircle size={48} />
-                          <p>Video streaming link being processed by instructor.</p>
-                        </div>
-                      )}
-                    </div>
+                  {/* DIRECT IN-LMS DOCUMENT / VIDEO / SPREADSHEET VIEWER */}
+                  {activeLesson.type !== 'text' && (
+                    <DocumentViewer
+                      type={activeLesson.type}
+                      url={activeLesson.attachment_url || activeLesson.attachment_path || activeLesson.video_url}
+                      fileName={activeLesson.attachment_name}
+                      title={activeLesson.title}
+                      content={activeLesson.content}
+                    />
                   )}
 
-                  {/* PDF Document Lesson */}
-                  {activeLesson.type === 'pdf' && (
-                    <div className="pdf-resource-card">
-                      <FileText size={36} className="pdf-icon" />
-                      <div>
-                        <strong>{activeLesson.attachment_name ?? 'Lecture Slides & Notes.pdf'}</strong>
-                        <p>Official course slide deck and reading materials.</p>
-                      </div>
-                      {activeLesson.attachment_path ? (
-                        <a
-                          href={activeLesson.attachment_path}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="btn btn-primary btn-sm"
-                        >
-                          <Download size={14} /> Download PDF
-                        </a>
-                      ) : (
-                        <button className="btn btn-primary btn-sm" disabled>
-                          <Download size={14} /> PDF unavailable
-                        </button>
-                      )}
-                    </div>
-                  )}
-
-                  {/* Rich Text / Markdown Content */}
-                  <div className="lesson-text-body">
-                    {activeLesson.content ? (
+                  {/* Lesson Notes & Explanation Text */}
+                  {activeLesson.content && (
+                    <div className="lesson-text-body">
+                      <h4 className="lesson-notes-heading">Lesson Notes & Guidelines</h4>
                       <div className="formatted-text">
                         {activeLesson.content.split('\n\n').map((paragraph, idx) => (
                           <p key={idx}>{paragraph}</p>
                         ))}
                       </div>
-                    ) : (
-                      <p className="text-muted">No additional reading text provided for this lesson.</p>
-                    )}
-                  </div>
+                    </div>
+                  )}
+
+                  {activeLesson.type === 'text' && !activeLesson.content && (
+                    <div className="viewer-empty-placeholder">
+                      <FileText size={40} />
+                      <p>No reading content provided for this lesson yet.</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -482,7 +640,7 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                 <label>Module Title</label>
                 <input
                   required
-                  placeholder="e.g. Module 3: Trees & Binary Search Trees"
+                  placeholder="e.g. Module 3: Database Indexing & Optimisation"
                   value={newSectionTitle}
                   onChange={(e) => setNewSectionTitle(e.target.value)}
                 />
@@ -502,20 +660,26 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
         </div>
       )}
 
-      {/* Modal: New Lesson */}
+      {/* Modal: Create or Edit Lesson */}
       {isLessonModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsLessonModalOpen(false)}>
           <div className="modal-dialog modal-wide" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Add Lesson to Course</h3>
+              <h3>{editingLessonId ? 'Edit Lesson' : 'Add Lesson to Course'}</h3>
               <button className="btn-close" onClick={() => setIsLessonModalOpen(false)}>
                 <X size={18} />
               </button>
             </div>
-            <form onSubmit={handleCreateLesson} className="modal-form">
+
+            <form onSubmit={handleSaveLesson} className="modal-form">
               <div className="form-group">
                 <label>Parent Module</label>
-                <select value={targetSectionId} onChange={(e) => setTargetSectionId(e.target.value)} required>
+                <select
+                  value={targetSectionId}
+                  onChange={(e) => setTargetSectionId(e.target.value)}
+                  required
+                  disabled={Boolean(editingLessonId)}
+                >
                   {sections.map((s) => (
                     <option key={s.id} value={s.id}>{s.title}</option>
                   ))}
@@ -527,81 +691,166 @@ export const LessonPlayerView: React.FC<LessonPlayerViewProps> = ({ courseId, on
                   <label>Lesson Title</label>
                   <input
                     required
-                    placeholder="e.g. 2.2 Stack Implementation & Infix-to-Postfix"
-                    value={newLessonTitle}
-                    onChange={(e) => setNewLessonTitle(e.target.value)}
+                    placeholder="e.g. 3.1 B-Tree Index Architecture"
+                    value={lessonTitle}
+                    onChange={(e) => setLessonTitle(e.target.value)}
                   />
                 </div>
                 <div className="form-group">
                   <label>Content Type</label>
                   <select
-                    value={newLessonType}
-                    onChange={(e) => setNewLessonType(e.target.value as 'text' | 'video' | 'pdf')}
+                    value={lessonType}
+                    onChange={(e) => setLessonType(e.target.value as LessonType)}
                   >
                     <option value="text">Text / Reading</option>
-                    <option value="video">Video Stream</option>
+                    <option value="video">Video Lecture (Embed / YouTube / MP4)</option>
                     <option value="pdf">PDF Document</option>
+                    <option value="doc">Word Document (.docx, .doc)</option>
+                    <option value="excel">Excel Spreadsheet (.xlsx, .csv)</option>
+                    <option value="link">External Web Link</option>
+                    <option value="embed">Interactive Web Embed</option>
                   </select>
                 </div>
               </div>
 
-              {newLessonType === 'video' && (
-                <div className="form-group">
-                  <label>Video Stream / Embed URL</label>
+              {/* Upload Document / Media File Section */}
+              <div className="form-group upload-resource-box">
+                <label className="upload-box-title">
+                  <UploadCloud size={16} />
+                  <span>Upload File (PDF, Word, Excel, Video)</span>
+                </label>
+                <div className="upload-dropzone">
                   <input
-                    placeholder="https://... (S3 signed URL, CloudFront, or MP4)"
-                    value={newLessonVideo}
-                    onChange={(e) => setNewLessonVideo(e.target.value)}
+                    type="file"
+                    ref={fileInputRef}
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.mp4,.webm,.mov,.txt"
+                    onChange={handleFileUpload}
+                    disabled={uploading}
+                    id="lesson-file-input"
+                    style={{ display: 'none' }}
+                  />
+                  <label htmlFor="lesson-file-input" className="btn btn-secondary btn-sm upload-btn-label">
+                    {uploading ? (
+                      <>
+                        <RefreshCw size={14} className="spin-icon" />
+                        <span>Uploading...</span>
+                      </>
+                    ) : (
+                      <>
+                        <UploadCloud size={14} />
+                        <span>Choose File to Upload</span>
+                      </>
+                    )}
+                  </label>
+                  <span className="upload-help-text">
+                    Supported: PDF, DOCX, XLSX, XLS, CSV, MP4 (Max 25MB)
+                  </span>
+                </div>
+
+                {uploadStatus && (
+                  <div className="upload-status-badge">
+                    <CheckCircle2 size={14} className="text-success" />
+                    <span>{uploadStatus}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Video URL or Embed Input */}
+              {(lessonType === 'video' || lessonType === 'embed') && (
+                <div className="form-group">
+                  <label>
+                    {lessonType === 'video'
+                      ? 'Video Stream, YouTube, Vimeo URL or Embed Code'
+                      : 'Embed Iframe Code or URL'}
+                  </label>
+                  <input
+                    placeholder={
+                      lessonType === 'video'
+                        ? 'e.g. https://www.youtube.com/watch?v=... or direct MP4 link'
+                        : 'e.g. https://... or <iframe src="..."></iframe>'
+                    }
+                    value={lessonVideo}
+                    onChange={(e) => setLessonVideo(e.target.value)}
+                  />
+                  <small className="form-help">
+                    You can paste YouTube, Vimeo, direct MP4 URLs, or iframe embed snippets.
+                  </small>
+                </div>
+              )}
+
+              {/* Web Link Input */}
+              {lessonType === 'link' && (
+                <div className="form-group">
+                  <label>External Link / Resource URL</label>
+                  <input
+                    type="url"
+                    placeholder="https://docs.google.com/... or https://..."
+                    value={lessonAttachmentPath}
+                    onChange={(e) => setLessonAttachmentPath(e.target.value)}
+                    required
                   />
                 </div>
               )}
 
-              {newLessonType === 'pdf' && (
-                <>
+              {/* Document Source / Attachment Path & Name */}
+              {(lessonType === 'pdf' || lessonType === 'doc' || lessonType === 'word' || lessonType === 'excel' || lessonType === 'spreadsheet') && (
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '12px' }}>
                   <div className="form-group">
-                    <label>PDF Source Path or URL</label>
+                    <label>Document Path or URL</label>
                     <input
-                      type="text"
-                      placeholder="https://... or authorized storage path"
-                      value={newLessonAttachmentPath}
-                      onChange={(e) => setNewLessonAttachmentPath(e.target.value)}
+                      placeholder="Uploaded file path or public URL (e.g. https://...)"
+                      value={lessonAttachmentPath}
+                      onChange={(e) => setLessonAttachmentPath(e.target.value)}
                       required
                     />
                   </div>
                   <div className="form-group">
-                    <label>PDF File Name (Optional)</label>
+                    <label>File Display Name</label>
                     <input
-                      placeholder="e.g. Lecture 2 Notes.pdf"
-                      value={newLessonAttachmentName}
-                      onChange={(e) => setNewLessonAttachmentName(e.target.value)}
+                      placeholder="e.g. Lecture Notes.docx"
+                      value={lessonAttachmentName}
+                      onChange={(e) => setLessonAttachmentName(e.target.value)}
                     />
                   </div>
-                </>
+                </div>
               )}
 
+              {/* Notes & Reading Content */}
               <div className="form-group">
-                <label>Lesson Notes & Body Text</label>
+                <label>Lesson Notes & Guidelines</label>
                 <textarea
                   rows={4}
-                  placeholder="Lesson explanations, code snippets, or reading guidelines..."
-                  value={newLessonContent}
-                  onChange={(e) => setNewLessonContent(e.target.value)}
+                  placeholder="Accompanying explanations, study objectives, code snippets, or reference links..."
+                  value={lessonContent}
+                  onChange={(e) => setLessonContent(e.target.value)}
                 />
               </div>
 
-              <div className="form-group" style={{ flexDirection: 'row', alignItems: 'center', gap: '8px' }}>
+              {/* Free Preview Toggle */}
+              <div className="form-group preview-toggle-wrap">
                 <input
                   type="checkbox"
                   id="preview-check"
-                  checked={newLessonPreview}
-                  onChange={(e) => setNewLessonPreview(e.target.checked)}
+                  checked={lessonPreview}
+                  onChange={(e) => setLessonPreview(e.target.checked)}
                 />
                 <label htmlFor="preview-check" style={{ margin: 0, cursor: 'pointer' }}>
-                  Enable Free Preview (accessible without enrolment)
+                  Enable Free Preview (accessible to prospective students without enrollment)
                 </label>
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block">Save Lesson</button>
+              <div className="modal-actions-bar">
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsLessonModalOpen(false)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={uploading}>
+                  {editingLessonId ? 'Update Lesson' : 'Save & Publish Lesson'}
+                </button>
+              </div>
             </form>
           </div>
         </div>

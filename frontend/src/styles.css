@@ -4689,3 +4689,511 @@ body {
   font-weight: 600;
 }
 
+
+/* ==========================================================================
+   Epic 5: LMS In-App Document Viewer & Embedded Media (PDF, Word, Excel, Video, Links)
+   ========================================================================== */
+
+.lms-doc-viewer-wrapper {
+  display: flex;
+  flex-direction: column;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  margin-bottom: 20px;
+}
+
+.lms-doc-viewer-wrapper.is-fullscreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 99999;
+  border-radius: 0;
+  margin: 0;
+}
+
+.viewer-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.viewer-title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #f1f5f9;
+}
+
+.viewer-file-name {
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewer-format-pill {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(99, 102, 241, 0.25);
+  color: #818cf8;
+  letter-spacing: 0.05em;
+}
+
+.viewer-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.viewer-content-viewport {
+  position: relative;
+  min-height: 360px;
+  display: flex;
+  flex-direction: column;
+}
+
+.viewer-loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 60px 20px;
+  color: #94a3b8;
+}
+
+/* Video Player Viewport */
+.video-viewport-container {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 75vh;
+  background: #000000;
+}
+
+.embedded-video-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+}
+
+.embedded-html5-video {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
+}
+
+/* PDF Document Viewport */
+.pdf-viewport-container {
+  width: 100%;
+  height: 75vh;
+  min-height: 520px;
+  background: #1e293b;
+}
+
+.embedded-pdf-iframe {
+  width: 100%;
+  height: 100%;
+  border: none;
+  background: #ffffff;
+}
+
+/* Word Document Viewport (.docx, .doc) */
+.word-viewport-container {
+  width: 100%;
+  height: 75vh;
+  min-height: 520px;
+  overflow-y: auto;
+  background: #0f172a;
+  padding: 28px 16px;
+}
+
+.word-paper-page {
+  max-width: 860px;
+  margin: 0 auto;
+  background: #ffffff;
+  color: #1e293b;
+  padding: 48px 56px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.75;
+  font-size: 15px;
+}
+
+.word-doc-body h1, .word-doc-body h2, .word-doc-body h3 {
+  color: #0f172a;
+  margin-top: 1.4em;
+  margin-bottom: 0.6em;
+  font-weight: 700;
+}
+
+.word-doc-body p {
+  margin-bottom: 1em;
+}
+
+.word-doc-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5em 0;
+}
+
+.word-doc-body th, .word-doc-body td {
+  border: 1px solid #cbd5e1;
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.word-doc-body th {
+  background: #f1f5f9;
+  font-weight: 600;
+}
+
+.embedded-office-iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 520px;
+  border: none;
+  background: #ffffff;
+}
+
+/* Excel Spreadsheet Viewport (.xlsx, .xls, .csv) */
+.excel-viewport-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 75vh;
+  min-height: 520px;
+  background: #0f172a;
+}
+
+.excel-sheet-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  background: #1e293b;
+  border-bottom: 1px solid #334155;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.excel-sheet-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.sheet-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #334155;
+  color: #cbd5e1;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.sheet-tab-btn:hover {
+  background: #475569;
+  color: #f8fafc;
+}
+
+.sheet-tab-btn.is-active {
+  background: #10b981;
+  color: #ffffff;
+  border-color: #059669;
+}
+
+.excel-search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.excel-search-box input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f1f5f9;
+  font-size: 12px;
+  width: 180px;
+}
+
+.excel-table-scrollable {
+  flex: 1;
+  overflow: auto;
+  background: #ffffff;
+}
+
+.excel-lms-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  color: #0f172a;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace;
+}
+
+.excel-lms-table th, .excel-lms-table td {
+  border: 1px solid #e2e8f0;
+  padding: 6px 10px;
+  white-space: nowrap;
+}
+
+.excel-lms-table thead th {
+  background: #f1f5f9;
+  font-weight: 600;
+  color: #334155;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.excel-lms-table .row-num-col, .excel-lms-table .row-num-cell {
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+  text-align: center;
+  width: 40px;
+  user-select: none;
+}
+
+.excel-lms-table tbody tr:nth-child(even) {
+  background: #f8fafc;
+}
+
+.excel-lms-table tbody tr:hover {
+  background: #e0f2fe;
+}
+
+/* Link & Embed Viewport */
+.link-embed-viewport-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 75vh;
+  min-height: 500px;
+  background: #1e293b;
+}
+
+.embedded-web-iframe {
+  flex: 1;
+  width: 100%;
+  border: none;
+  background: #ffffff;
+}
+
+.raw-embed-wrapper {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f172a;
+}
+
+.raw-embed-wrapper iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 500px;
+  border: none;
+}
+
+.link-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  background: #1e293b;
+  border-top: 1px solid #334155;
+}
+
+/* Empty placeholder */
+.viewer-empty-placeholder, .viewer-empty-sheet {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 24px;
+  color: #64748b;
+  text-align: center;
+}
+
+/* Lesson player enhancements */
+.lesson-tag-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.badge-preview {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  background: #059669;
+  color: #ffffff;
+  letter-spacing: 0.05em;
+}
+
+.lesson-top-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lesson-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.btn-icon-tiny {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #cbd5e1;
+  border: none;
+  cursor: pointer;
+  margin-left: auto;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-tiny:hover {
+  background: #6366f1;
+  color: #ffffff;
+}
+
+.btn-icon-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  background: transparent;
+  color: #94a3b8;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-icon-ghost:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: #f1f5f9;
+}
+
+.btn-icon-ghost.text-danger:hover {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.lesson-notes-heading {
+  font-size: 14px;
+  font-weight: 600;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+/* File Upload Box in Lesson Modal */
+.upload-resource-box {
+  background: #1e293b;
+  border: 1px dashed #475569;
+  border-radius: 8px;
+  padding: 14px;
+}
+
+.upload-box-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: #cbd5e1;
+  margin-bottom: 8px;
+}
+
+.upload-dropzone {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.upload-btn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  margin: 0;
+}
+
+.upload-help-text {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.upload-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: #10b981;
+  font-weight: 500;
+}
+
+.preview-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: #1e293b;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+
+.modal-actions-bar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid #334155;
+}

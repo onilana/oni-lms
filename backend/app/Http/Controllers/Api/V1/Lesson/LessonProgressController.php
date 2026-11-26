@@ -9,11 +9,13 @@ use App\Models\Lesson;
 use App\Models\LessonProgress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class LessonProgressController
 {
     public function updateProgress(LessonProgressRequest $request, Lesson $lesson): JsonResponse
     {
+        Gate::authorize('access', $lesson);
         $user = $request->user();
         $validated = $request->validated();
 

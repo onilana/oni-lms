@@ -20,6 +20,7 @@ use App\Models\Role;
 use App\Models\StudentProfile;
 use App\Models\TeacherProfile;
 use App\Models\User;
+use App\Services\CourseAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -609,10 +610,15 @@ class DashboardController
             'father_name' => 'nullable|string|max:255',
             'mother_name' => 'nullable|string|max:255',
             'address' => 'nullable|string|max:1000',
+            'programme_id' => 'nullable|uuid|exists:programmes,id',
+            'department_id' => 'nullable|uuid|exists:departments,id',
         ]);
 
         if (isset($validated['name'])) {
             $user->update(['name' => $validated['name']]);
+        }
+        if (isset($validated['phone'])) {
+            $user->update(['phone' => $validated['phone']]);
         }
 
         $profile = StudentProfile::firstOrCreate(
@@ -629,12 +635,35 @@ class DashboardController
                 $profileUpdates[$field] = $validated[$field];
             }
         }
+
+        // Programme and Department assignment cannot be changed by students directly.
+        // Only Admin or HoD is authorized to reassign a student's Programme or Department.
+        if (! $user->isSuperAdmin() && ! $user->hasRole([Role::COLLEGE_ADMIN, Role::HOD, Role::DEPT_ADMIN])) {
+            unset($validated['programme_id'], $validated['department_id']);
+        }
+
+        if (!empty($validated['programme_id'])) {
+            $profileUpdates['programme_id'] = $validated['programme_id'];
+        } elseif (!empty($validated['department_id'])) {
+            $firstProg = Programme::where('department_id', $validated['department_id'])->value('id');
+            if ($firstProg) {
+                $profileUpdates['programme_id'] = $firstProg;
+            }
+        }
+
         if (!empty($profileUpdates)) {
             $profile->update($profileUpdates);
         }
 
+        // Only synchronize courses if programme/department was actually updated by an Admin or HoD
+        if (!empty($validated['programme_id']) || !empty($validated['department_id'])) {
+            CourseAccessService::syncUserAccess($user);
+        }
+
+        $profile->load(['programme.department']);
+
         return response()->json([
-            'message' => 'Profile details updated successfully.',
+            'message' => 'Profile details updated and course access synchronized successfully.',
             'student' => [
                 'name' => $user->name,
                 'email' => $user->email,
@@ -645,6 +674,76 @@ class DashboardController
                 'father_name' => $profile->father_name,
                 'mother_name' => $profile->mother_name,
                 'address' => $profile->address,
+                'programme_id' => $profile->programme_id,
+                'programme' => $profile->programme?->name ?? '',
+                'department_id' => $profile->programme?->department_id,
+                'department' => $profile->programme?->department?->name ?? '',
+            ],
+        ]);
+    }
+
+    /**
+     * Teacher / Faculty Profile & Department Assignment Update
+     */
+    public function updateTeacherProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+        if (!$user) {
+            abort(401, 'Unauthenticated');
+        }
+
+        $validated = $request->validate([
+            'name' => 'sometimes|required|string|max:255',
+            'department_id' => 'sometimes|required|uuid|exists:departments,id',
+            'designation' => 'nullable|string|max:100',
+            'qualification' => 'nullable|string|max:100',
+            'phone' => 'nullable|string|max:50',
+            'employee_id_number' => 'nullable|string|max:50',
+        ]);
+
+        if (isset($validated['name'])) {
+            $user->update(['name' => $validated['name']]);
+        }
+        if (isset($validated['phone'])) {
+            $user->update(['phone' => $validated['phone']]);
+        }
+
+        $profile = TeacherProfile::firstOrCreate(
+            ['user_id' => $user->id],
+            [
+                'department_id' => $validated['department_id'] ?? Department::value('id'),
+                'employee_id_number' => 'FAC-' . date('Y') . '-' . strtoupper(\Illuminate\Support\Str::random(5)),
+                'status' => 'active',
+            ]
+        );
+
+        $profileUpdates = [];
+        foreach (['department_id', 'designation', 'qualification', 'employee_id_number'] as $field) {
+            if (array_key_exists($field, $validated)) {
+                $profileUpdates[$field] = $validated[$field];
+            }
+        }
+        if (!empty($profileUpdates)) {
+            $profile->update($profileUpdates);
+        }
+
+        // Synchronize teaching courses under the assigned department
+        CourseAccessService::syncUserAccess($user);
+
+        $profile->load('department');
+
+        return response()->json([
+            'message' => 'Faculty profile and department assignment updated successfully.',
+            'teacher' => [
+                'name' => $user->name,
+                'email' => $user->email,
+                'phone' => $user->phone ?? '',
+                'department_id' => $profile->department_id,
+                'department' => $profile->department?->name ?? 'Department',
+                'department_code' => $profile->department?->code ?? '',
+                'employee_id' => $profile->employee_id_number,
+                'designation' => $profile->designation,
+                'qualification' => $profile->qualification,
             ],
         ]);
     }

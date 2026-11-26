@@ -41,8 +41,20 @@ class WordPressIntegrationController
             return response()->json(['message' => 'Only administrators can sync notices from WordPress.'], 403);
         }
 
-        $mockItems = $request->input('notices', []);
-        $result = $service->syncNoticesFromWordPress($mockItems);
+        $validated = $request->validate([
+            'notices' => 'sometimes|array',
+            'notices.*.title' => 'required_with:notices|string|max:255',
+            'notices.*.content' => 'required_with:notices|string',
+            'notices.*.priority' => 'sometimes|string|in:normal,high',
+        ]);
+
+        try {
+            $result = $service->syncNoticesFromWordPress($validated['notices'] ?? []);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'message' => $e->getMessage(),
+            ], 502);
+        }
 
         AuditService::log(
             action: 'wordpress.notices_synced',
@@ -63,14 +75,14 @@ class WordPressIntegrationController
         $validated = $request->validate([
             'email' => 'required|email',
             'name' => 'required|string|max:255',
-            'token' => 'nullable|string',
+            'token' => 'required|string',
         ]);
 
         try {
             $result = $service->handleSsoHandshake(
                 email: $validated['email'],
                 name: $validated['name'],
-                token: $validated['token'] ?? null
+                token: $validated['token']
             );
 
             return response()->json($result);

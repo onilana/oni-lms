@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class RoleAndPermissionSeeder extends Seeder
 {
@@ -166,13 +167,19 @@ class RoleAndPermissionSeeder extends Seeder
             collect($permissionModels)->pluck('id')
         );
 
-        // 4. Default Super Admin User (firstOrCreate preserves any changed password or custom profile)
+        // 4. Initial Super Admin User (requires INITIAL_ADMIN_PASSWORD in environment)
+        $adminPassword = env('INITIAL_ADMIN_PASSWORD');
+        if (!is_string($adminPassword) || $adminPassword === '') {
+            throw new \RuntimeException('INITIAL_ADMIN_PASSWORD must be configured before seeding.');
+        }
+
         $superAdmin = User::firstOrCreate(
-            ['email' => 'admin@onilms.edu'],
+            ['email' => env('INITIAL_ADMIN_EMAIL', 'admin@onilms.edu')],
             [
                 'name' => 'Super Administrator',
-                'password' => Hash::make(env('INITIAL_ADMIN_PASSWORD', 'OniAdmin@2026!')),
+                'password' => Hash::make($adminPassword),
                 'status' => 'active',
+                'must_change_password' => app()->environment('production'),
                 'email_verified_at' => now(),
             ]
         );
@@ -181,12 +188,17 @@ class RoleAndPermissionSeeder extends Seeder
             $superAdmin->roles()->syncWithoutDetaching([$roles[Role::SUPER_ADMIN]->id]);
         }
 
-        // 5. Default Demo Student User
+        // 5. Demo accounts (only seeded in local/testing environments, never in production)
+        if (!app()->environment(['local', 'testing'])) {
+            return;
+        }
+
+        $demoStudentPassword = env('INITIAL_STUDENT_PASSWORD') ?: Str::random(24);
         $demoStudent = User::firstOrCreate(
             ['email' => 'student@onilms.edu'],
             [
                 'name' => 'Aarav Sharma',
-                'password' => Hash::make(env('INITIAL_STUDENT_PASSWORD', 'OniStudent@2026!')),
+                'password' => Hash::make($demoStudentPassword),
                 'status' => 'active',
                 'email_verified_at' => now(),
             ]
@@ -196,12 +208,12 @@ class RoleAndPermissionSeeder extends Seeder
             $demoStudent->roles()->syncWithoutDetaching([$roles[Role::STUDENT]->id]);
         }
 
-        // 6. Default Demo Teacher User
+        $demoTeacherPassword = env('INITIAL_TEACHER_PASSWORD') ?: Str::random(24);
         $demoTeacher = User::firstOrCreate(
             ['email' => 'teacher@onilms.edu'],
             [
                 'name' => 'Dr. Priya Ramanathan',
-                'password' => Hash::make(env('INITIAL_TEACHER_PASSWORD', 'OniTeacher@2026!')),
+                'password' => Hash::make($demoTeacherPassword),
                 'status' => 'active',
                 'email_verified_at' => now(),
             ]
@@ -211,12 +223,12 @@ class RoleAndPermissionSeeder extends Seeder
             $demoTeacher->roles()->syncWithoutDetaching([$roles[Role::TEACHER]->id]);
         }
 
-        // 7. Default Demo HOD / Department Admin User
+        $demoHodPassword = env('INITIAL_HOD_PASSWORD') ?: Str::random(24);
         $demoHod = User::firstOrCreate(
             ['email' => 'hod@onilms.edu'],
             [
                 'name' => 'Prof. Vikram Sengupta',
-                'password' => Hash::make(env('INITIAL_HOD_PASSWORD', 'OniAdmin@2026!')),
+                'password' => Hash::make($demoHodPassword),
                 'status' => 'active',
                 'email_verified_at' => now(),
             ]

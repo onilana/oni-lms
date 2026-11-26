@@ -7,22 +7,17 @@ use App\Http\Resources\Course\CourseEnrolmentResource;
 use App\Models\AcademicSession;
 use App\Models\Course;
 use App\Models\CourseEnrolment;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 
 class CourseEnrolmentController
 {
     public function index(Request $request, Course $course): JsonResponse
     {
-        $user = $request->user();
-        if ($user && !$user->isInstitutionAdmin() && $user->hasRole(['hod', 'dept_admin', 'teacher'])) {
-            $assignedDeptId = $user->getAssignedDepartmentId();
-            $isInstructor = $course->instructors()->where('user_id', $user->id)->exists();
-            if ($course->department_id !== $assignedDeptId && !$isInstructor) {
-                abort(403, 'Access denied. You do not have permission to view student enrolments outside your assigned department.');
-            }
-        }
+        Gate::authorize('manageEnrolments', $course);
 
         $enrolments = CourseEnrolment::where('course_id', $course->id)
             ->with(['user', 'academicSession', 'semester'])
@@ -71,8 +66,13 @@ class CourseEnrolmentController
         ], 201);
     }
 
-    public function unenroll(Course $course, User $user): JsonResponse
+    public function unenroll(Request $request, Course $course, User $user): JsonResponse
     {
+        $authUser = $request->user();
+        if (!$authUser || ($authUser->id !== $user->id && !Gate::allows('manageEnrolments', $course))) {
+            abort(403, 'Access denied. You do not have permission to unenroll this user.');
+        }
+
         CourseEnrolment::where('course_id', $course->id)
             ->where('user_id', $user->id)
             ->delete();

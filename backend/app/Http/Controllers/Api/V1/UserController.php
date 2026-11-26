@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Resources\UserResource;
+use App\Models\Department;
+use App\Models\Programme;
 use App\Models\Role;
 use App\Models\StudentProfile;
 use App\Models\TeacherProfile;
-use App\Models\Department;
 use App\Models\User;
+use App\Services\CourseAccessService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -88,9 +90,15 @@ class UserController
             $level = strtolower($request->query('level'));
             $query->whereHas('studentProfile.programme', function ($pq) use ($level) {
                 if ($level === 'ug') {
-                    $pq->where('duration_years', '>=', 3)->where('duration_years', '<=', 5);
+                    $pq->where(function ($sub) {
+                        $sub->whereBetween('duration_years', [3, 5])
+                            ->orWhere('name', 'like', '%Bachelor%')
+                            ->orWhere('name', 'like', '%B.Ed%');
+                    });
                 } elseif ($level === 'pg') {
-                    $pq->where('duration_years', 2);
+                    $pq->where('duration_years', 2)
+                        ->where('name', 'not like', '%Bachelor%')
+                        ->where('name', 'not like', '%B.Ed%');
                 } elseif ($level === 'phd' || $level === 'doctoral') {
                     $pq->where('name', 'like', '%Ph.D%')->orWhere('name', 'like', '%Doctoral%');
                 } elseif ($level === 'diploma') {
@@ -198,21 +206,25 @@ class UserController
                 $user->roles()->sync([$role->id]);
             }
 
-            if ($validated['role'] === Role::TEACHER || !empty($validated['department_id'])) {
+            if (in_array($validated['role'], [Role::TEACHER, Role::HOD, Role::DEPT_ADMIN]) || !empty($validated['department_id'])) {
                 TeacherProfile::create([
                     'user_id' => $user->id,
                     'department_id' => $validated['department_id'] ?? null,
-                    'employee_id_number' => $validated['employee_id_number'] ?? null,
-                    'designation' => $validated['designation'] ?? 'Faculty Member',
+                    'employee_id_number' => $validated['employee_id_number'] ?? ('FAC-' . date('Y') . '-' . strtoupper(Str::random(5))),
+                    'designation' => $validated['designation'] ?? ($validated['role'] === Role::HOD ? 'Head of Department' : 'Faculty Member'),
                     'qualification' => $validated['qualification'] ?? null,
                     'status' => $validated['status'] ?? 'active',
                 ]);
             } elseif ($validated['role'] === Role::STUDENT) {
+                $progId = $validated['programme_id'] ?? null;
+                if (!$progId && !empty($validated['department_id'])) {
+                    $progId = Programme::where('department_id', $validated['department_id'])->value('id');
+                }
                 StudentProfile::create([
                     'user_id' => $user->id,
-                    'programme_id' => $validated['programme_id'] ?? null,
+                    'programme_id' => $progId,
                     'batch_id' => $validated['batch_id'] ?? null,
-                    'student_id_number' => $validated['student_id_number'] ?? null,
+                    'student_id_number' => $validated['student_id_number'] ?? ('STU-' . date('Y') . '-' . strtoupper(Str::random(5))),
                     'current_semester' => $validated['current_semester'] ?? 1,
                     'admission_date' => now()->toDateString(),
                     'status' => $validated['status'] ?? 'active',
@@ -221,6 +233,9 @@ class UserController
 
             return $user;
         });
+
+        // Automatically grant access to courses under assigned Department/Programme
+        CourseAccessService::syncUserAccess($user);
 
         $user->load([
             'roles.permissions',
@@ -298,6 +313,9 @@ class UserController
                 $studentProfile->save();
             }
         });
+
+        // Re-synchronize course access whenever programme or department changes
+        CourseAccessService::syncUserAccess($user);
 
         $user->load([
             'roles.permissions',
@@ -437,10 +455,24 @@ class UserController
             // Create appropriate profile
             if ($roleName === Role::STUDENT) {
                 $studentIdNum = $row['student_id_number'] ?? $row['student_id'] ?? ('STU-' . date('Y') . '-' . strtoupper(Str::random(5)));
+                $progId = $row['programme_id'] ?? null;
+                if (!$progId && !empty($row['programme'])) {
+                    $progId = Programme::where('code', $row['programme'])->orWhere('name', 'like', "%{$row['programme']}%")->value('id');
+                }
+                if (!$progId && !empty($row['department_id'])) {
+                    $progId = Programme::where('department_id', $row['department_id'])->value('id');
+                }
+                if (!$progId && !empty($row['department'])) {
+                    $dId = Department::where('code', $row['department'])->orWhere('name', 'like', "%{$row['department']}%")->value('id');
+                    if ($dId) {
+                        $progId = Programme::where('department_id', $dId)->value('id');
+                    }
+                }
+
                 StudentProfile::create([
                     'user_id' => $user->id,
                     'student_id_number' => $studentIdNum,
-                    'programme_id' => $row['programme_id'] ?? null,
+                    'programme_id' => $progId,
                     'batch_id' => $row['batch_id'] ?? null,
                     'admission_date' => $row['admission_date'] ?? now(),
                     'current_semester' => $row['current_semester'] ?? 1,
@@ -448,6 +480,12 @@ class UserController
                 ]);
             } elseif ($roleName === Role::TEACHER || $roleName === Role::HOD) {
                 $deptId = $row['department_id'] ?? null;
+                if (!$deptId && !empty($row['department'])) {
+                    $deptId = Department::where('code', $row['department'])->orWhere('name', 'like', "%{$row['department']}%")->value('id');
+                }
+                if (!$deptId && !empty($row['programme_id'])) {
+                    $deptId = Programme::where('id', $row['programme_id'])->value('department_id');
+                }
                 if (!$deptId) {
                     $deptId = Department::value('id');
                 }
@@ -461,6 +499,9 @@ class UserController
                     'status' => 'active',
                 ]);
             }
+
+            // Automatically grant access to all courses in the assigned Department/Programme
+            CourseAccessService::syncUserAccess($user);
 
             if (isset($breakdown[$roleName])) {
                 $breakdown[$roleName]++;

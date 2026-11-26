@@ -48,7 +48,8 @@ Route::prefix('v1')->group(function (): void {
     // Public WordPress Integration (Milestone 13 - oni_lana)
     Route::prefix('integrations/wordpress')->group(function (): void {
         Route::get('/catalogue', [WordPressIntegrationController::class, 'catalogue']);
-        Route::post('/sso-handshake', [WordPressIntegrationController::class, 'ssoHandshake']);
+        Route::post('/sso-handshake', [WordPressIntegrationController::class, 'ssoHandshake'])
+            ->middleware('throttle:10,1');
     });
 
     // Authenticated endpoints
@@ -65,6 +66,7 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/dashboard/student', [DashboardController::class, 'student']);
         Route::put('/student/profile', [DashboardController::class, 'updateStudentProfile']);
         Route::get('/dashboard/teacher', [DashboardController::class, 'teacher']);
+        Route::put('/teacher/profile', [DashboardController::class, 'updateTeacherProfile']);
         Route::get('/dashboard/department', [DashboardController::class, 'department']);
         Route::get('/dashboard/admin', [DashboardController::class, 'admin']);
 
@@ -156,6 +158,8 @@ Route::prefix('v1')->group(function (): void {
         });
 
         // Lessons & Learning Content (Epic 5)
+        Route::post('/lessons/upload-attachment', [LessonController::class, 'uploadAttachment']);
+
         Route::prefix('sections/{section}/lessons')->group(function (): void {
             Route::get('/', [LessonController::class, 'index']);
             Route::post('/', [LessonController::class, 'store']);
@@ -304,6 +308,7 @@ Route::prefix('v1')->group(function (): void {
         Route::prefix('backups')->group(function (): void {
             Route::get('/', [BackupController::class, 'index']);
             Route::post('/', [BackupController::class, 'create']);
+            Route::post('/{filename}/verify', [BackupController::class, 'verify']);
             Route::get('/{filename}/download', [BackupController::class, 'download']);
         });
     });

@@ -73,6 +73,10 @@ class AiAssistantController
     {
         $user = $request->user();
 
+        if (!$conversation->canAccess($user)) {
+            return response()->json(['message' => 'Unauthorized access to this conversation.'], 403);
+        }
+
         $validated = $request->validate([
             'message' => 'required|string|max:3000',
         ]);

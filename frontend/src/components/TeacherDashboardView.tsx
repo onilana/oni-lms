@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ClipboardList,
   Clock,
+  Edit2,
   ExternalLink,
   GraduationCap,
   PlayCircle,
@@ -39,8 +40,23 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [isStudentModalOpen, setIsStudentModalOpen] = useState(false);
 
+  // Edit Teacher Profile & Department State
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [departments, setDepartments] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [teacherName, setTeacherName] = useState('');
+  const [teacherDeptId, setTeacherDeptId] = useState('');
+  const [teacherDesignation, setTeacherDesignation] = useState('');
+  const [teacherQualification, setTeacherQualification] = useState('');
+  const [teacherPhone, setTeacherPhone] = useState('');
+  const [savingTeacher, setSavingTeacher] = useState(false);
+  const [teacherSuccess, setTeacherSuccess] = useState<string | null>(null);
+  const [teacherError, setTeacherError] = useState<string | null>(null);
+
   useEffect(() => {
     loadDashboard();
+    apiRequest<{ departments: { id: string; name: string; code: string }[] }>('/academic/departments')
+      .then((res) => setDepartments(res.departments || []))
+      .catch(() => {});
   }, [currentUser]);
 
   const loadDashboard = async () => {
@@ -53,6 +69,46 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
       setError(err.message || 'Failed to load faculty dashboard');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const openEditTeacherModal = () => {
+    if (!data?.teacher) return;
+    setTeacherName(data.teacher.name || '');
+    const matchedDept = departments.find((d) => d.name === data.teacher.department || (data.teacher as any).department_id === d.id);
+    setTeacherDeptId(matchedDept?.id || (data.teacher as any).department_id || '');
+    setTeacherDesignation(data.teacher.designation || 'Faculty Member');
+    setTeacherQualification(data.teacher.qualification || '');
+    setTeacherPhone('');
+    setTeacherError(null);
+    setTeacherSuccess(null);
+    setIsEditProfileOpen(true);
+  };
+
+  const handleSaveTeacherProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingTeacher(true);
+    setTeacherError(null);
+    try {
+      await apiRequest('/teacher/profile', {
+        method: 'PUT',
+        body: JSON.stringify({
+          name: teacherName,
+          department_id: teacherDeptId,
+          designation: teacherDesignation || null,
+          qualification: teacherQualification || null,
+          phone: teacherPhone || null,
+        }),
+      });
+      setTeacherSuccess('Department and profile updated! Teaching courses and curriculum automatically synchronized.');
+      setTimeout(() => {
+        setIsEditProfileOpen(false);
+        loadDashboard();
+      }, 1000);
+    } catch (err: any) {
+      setTeacherError(err.message || 'Failed to update faculty profile');
+    } finally {
+      setSavingTeacher(false);
     }
   };
 
@@ -96,7 +152,10 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
               {teacher.designation} · {teacher.qualification} · ID: <strong>{teacher.employee_id}</strong>
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+            <button className="btn btn-secondary" onClick={openEditTeacherModal} style={{ background: 'rgba(255, 255, 255, 0.15)', color: '#fff', border: '1px solid rgba(255, 255, 255, 0.25)' }}>
+              <Edit2 size={15} /> Edit Department &amp; Profile
+            </button>
             <button className="btn btn-secondary" onClick={() => onNavigateTo('live_classroom')}>
               <Radio size={16} /> Live Classroom
             </button>
@@ -349,6 +408,175 @@ export const TeacherDashboardView: React.FC<TeacherDashboardViewProps> = ({
           setSelectedStudentId(null);
         }}
       />
+
+      {/* EDIT TEACHER PROFILE & DEPARTMENT MODAL */}
+      {isEditProfileOpen && (
+        <div
+          className="modal-backdrop"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100,
+            padding: '16px',
+            overflowY: 'auto',
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsEditProfileOpen(false);
+          }}
+        >
+          <div
+            className="modal-content"
+            style={{
+              background: '#ffffff',
+              borderRadius: '12px',
+              maxWidth: '600px',
+              width: '100%',
+              padding: '24px',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              maxHeight: '90vh',
+              overflowY: 'auto',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', borderBottom: '1px solid var(--border)', paddingBottom: '12px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '18px' }}>Faculty Profile &amp; Department Assignment</h3>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-muted)' }}>
+                  Update your assigned academic department, designation, or identity details.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn-icon"
+                onClick={() => setIsEditProfileOpen(false)}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {teacherError && (
+              <div className="alert alert-danger" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px' }}>
+                <AlertCircle size={16} />
+                <span>{teacherError}</span>
+              </div>
+            )}
+
+            {teacherSuccess && (
+              <div className="alert alert-success" style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 14px' }}>
+                <CheckCircle2 size={16} />
+                <span>{teacherSuccess}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleSaveTeacherProfile}>
+              <div className="form-group" style={{ marginBottom: '14px' }}>
+                <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                  Assigned Academic Department <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <select
+                  className="form-control"
+                  value={teacherDeptId}
+                  onChange={(e) => setTeacherDeptId(e.target.value)}
+                  required
+                  style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                >
+                  <option value="">Select Academic Department...</option>
+                  {departments.map((d) => (
+                    <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
+                  ))}
+                </select>
+                <small style={{ color: '#0d9488', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  ✨ Switching department automatically synchronizes teaching permissions and gives you access to all courses in the new department.
+                </small>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    Full Legal Name <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={teacherName}
+                    onChange={(e) => setTeacherName(e.target.value)}
+                    required
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    Academic Designation
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={teacherDesignation}
+                    onChange={(e) => setTeacherDesignation(e.target.value)}
+                    placeholder="e.g. Professor / Associate Professor"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px', marginBottom: '14px' }}>
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    Highest Qualification
+                  </label>
+                  <input
+                    type="text"
+                    className="form-control"
+                    value={teacherQualification}
+                    onChange={(e) => setTeacherQualification(e.target.value)}
+                    placeholder="e.g. Ph.D. in Computer Science"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'block', fontSize: '13px', fontWeight: 600, marginBottom: '6px' }}>
+                    Contact Phone Number
+                  </label>
+                  <input
+                    type="tel"
+                    className="form-control"
+                    value={teacherPhone}
+                    onChange={(e) => setTeacherPhone(e.target.value)}
+                    placeholder="e.g. +91 9876543210"
+                    style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--border)' }}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px', borderTop: '1px solid var(--border)', paddingTop: '16px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setIsEditProfileOpen(false)}
+                  disabled={savingTeacher}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={savingTeacher}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+                >
+                  {savingTeacher ? <RefreshCw size={14} className="spinning" /> : <CheckCircle2 size={14} />}
+                  {savingTeacher ? 'Saving Changes...' : 'Save & Synchronize Courses'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

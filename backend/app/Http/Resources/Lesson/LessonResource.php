@@ -44,6 +44,9 @@ class LessonResource extends JsonResource
             'video_url' => $isAccessible ? $this->video_url : null,
             'attachment_name' => $isAccessible ? $this->attachment_name : null,
             'attachment_path' => $isAccessible ? $this->attachment_path : null,
+            'attachment_url' => $isAccessible && $this->attachment_path
+                ? (str_starts_with($this->attachment_path, 'http') ? $this->attachment_path : asset(ltrim($this->attachment_path, '/')))
+                : null,
             'status' => $this->status,
             'progress' => $progress,
             'created_at' => $this->created_at?->toIso8601String(),

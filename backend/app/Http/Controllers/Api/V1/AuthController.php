@@ -9,6 +9,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
 
@@ -37,11 +38,17 @@ class AuthController
         $deviceName = $credentials['device_name'] ?? 'web-client';
         $token = $user->createToken($deviceName)->plainTextToken;
 
+        if ($request->hasSession()) {
+            Auth::guard('web')->login($user);
+            $request->session()->regenerate();
+        }
+
         $user->forceFill(['last_login_at' => now()])->save();
 
         return response()->json([
             'token' => $token,
             'token_type' => 'Bearer',
+            'must_change_password' => (bool) $user->must_change_password,
             'user' => new UserResource($user),
         ]);
     }
@@ -57,7 +64,16 @@ class AuthController
 
     public function logout(Request $request): JsonResponse
     {
-        $request->user()->currentAccessToken()->delete();
+        $accessToken = $request->user()?->currentAccessToken();
+        if ($accessToken && method_exists($accessToken, 'delete')) {
+            $accessToken->delete();
+        }
+
+        if ($request->hasSession()) {
+            Auth::guard('web')->logout();
+            $request->session()->invalidate();
+            $request->session()->regenerateToken();
+        }
 
         return response()->json([
             'message' => 'Successfully logged out.',
@@ -77,6 +93,7 @@ class AuthController
 
         $user->forceFill([
             'password' => Hash::make($validated['new_password']),
+            'must_change_password' => false,
         ])->save();
 
         return response()->json([
