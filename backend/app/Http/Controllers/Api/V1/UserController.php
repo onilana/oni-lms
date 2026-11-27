@@ -110,6 +110,7 @@ class UserController
             $term = $request->query('search');
             $query->where(function ($q) use ($term) {
                 $q->where('name', 'like', "%{$term}%")
+                    ->orWhere('username', 'like', "%{$term}%")
                     ->orWhere('email', 'like', "%{$term}%")
                     ->orWhereHas('studentProfile', fn ($sq) => $sq->where('student_id_number', 'like', "%{$term}%"))
                     ->orWhereHas('teacherProfile', fn ($tq) => $tq->where('employee_id_number', 'like', "%{$term}%"));
@@ -163,6 +164,7 @@ class UserController
 
         $validated = $request->validate([
             'name' => 'required|string|max:255',
+            'username' => 'nullable|string|max:100|unique:users,username',
             'email' => 'required|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
             'status' => 'sometimes|string|in:active,inactive,suspended',
@@ -180,8 +182,15 @@ class UserController
         ]);
 
         $user = DB::transaction(function () use ($validated) {
+            $username = !empty($validated['username'])
+                ? strtolower(trim($validated['username']))
+                : User::generateUniqueUsername(
+                    $validated['student_id_number'] ?? $validated['employee_id_number'] ?? $validated['email']
+                );
+
             $user = User::create([
                 'name' => $validated['name'],
+                'username' => $username,
                 'email' => $validated['email'],
                 'password' => Hash::make($validated['password']),
                 'status' => $validated['status'] ?? 'active',
@@ -250,6 +259,7 @@ class UserController
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
+            'username' => ['sometimes', 'nullable', 'string', 'max:100', Rule::unique('users', 'username')->ignore($user->id)],
             'email' => ['sometimes', 'required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'status' => 'sometimes|string|in:active,inactive,suspended',
             'role' => 'sometimes|string|exists:roles,name',
@@ -268,6 +278,11 @@ class UserController
         DB::transaction(function () use ($user, $validated) {
             $userUpdate = [];
             if (isset($validated['name'])) $userUpdate['name'] = $validated['name'];
+            if (!empty($validated['username'])) {
+                $userUpdate['username'] = strtolower(trim($validated['username']));
+            } elseif (empty($user->username)) {
+                $userUpdate['username'] = User::generateUniqueUsername($user->email, $user->id);
+            }
             if (isset($validated['email'])) $userUpdate['email'] = $validated['email'];
             if (isset($validated['status'])) $userUpdate['status'] = $validated['status'];
 
@@ -482,12 +497,18 @@ class UserController
             }
 
             $password = $row['password'] ?? ($roleName === Role::STUDENT ? 'Student@2026!' : 'Staff@2026!');
+            $rowUsername = !empty($row['username']) ? strtolower(trim((string) $row['username'])) : null;
 
             if ($existingUser) {
                 $userUpdates = [
                     'name' => $name,
                     'status' => $row['status'] ?? $existingUser->status ?? 'active',
                 ];
+                if ($rowUsername) {
+                    $userUpdates['username'] = User::generateUniqueUsername($rowUsername, $existingUser->id);
+                } elseif (empty($existingUser->username)) {
+                    $userUpdates['username'] = User::generateUniqueUsername($email, $existingUser->id);
+                }
                 if (!empty($row['password'])) {
                     $userUpdates['password'] = Hash::make($row['password']);
                 }
@@ -495,8 +516,10 @@ class UserController
                 $user = $existingUser;
                 $updated++;
             } else {
+                $usernameSeed = $rowUsername ?? $row['student_id_number'] ?? $row['student_id'] ?? $row['employee_id_number'] ?? $row['employee_id'] ?? $email;
                 $user = User::create([
                     'name' => $name,
+                    'username' => User::generateUniqueUsername((string) $usernameSeed),
                     'email' => $email,
                     'password' => Hash::make($password),
                     'status' => $row['status'] ?? 'active',

@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Str;
 use Laravel\Sanctum\HasApiTokens;
 
 /**
@@ -22,6 +23,7 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name',
+        'username',
         'email',
         'password',
         'status',
@@ -86,6 +88,33 @@ class User extends Authenticatable
     public function isSuperAdmin(): bool
     {
         return $this->hasRole(Role::SUPER_ADMIN);
+    }
+
+    public static function generateUniqueUsername(string $seed, ?string $ignoreUserId = null): string
+    {
+        $base = strtolower(trim($seed));
+        if (str_contains($base, '@')) {
+            $base = Str::before($base, '@');
+        }
+        $base = preg_replace('/[^a-z0-9._-]+/', '_', $base) ?? 'user';
+        $base = trim($base, '._-');
+        if ($base === '') {
+            $base = 'user';
+        }
+        $base = substr($base, 0, 80);
+
+        $candidate = $base;
+        $counter = 1;
+        while (static::query()
+            ->whereRaw('LOWER(username) = ?', [$candidate])
+            ->when($ignoreUserId, fn ($q) => $q->where('id', '!=', $ignoreUserId))
+            ->exists()
+        ) {
+            $candidate = substr($base, 0, 72) . '_' . $counter;
+            $counter++;
+        }
+
+        return $candidate;
     }
 
     public function isInstitutionAdmin(): bool

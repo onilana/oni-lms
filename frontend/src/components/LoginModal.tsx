@@ -59,16 +59,17 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
           )}
 
           <div className="form-group">
-            <label htmlFor="login-email">Email Address</label>
+            <label htmlFor="login-email">Username or Email</label>
             <div className="input-wrap">
               <Mail size={16} className="input-icon" />
               <input
                 id="login-email"
-                type="email"
+                type="text"
+                autoComplete="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@college.edu"
+                placeholder="admin or admin@educare.edu"
               />
             </div>
           </div>

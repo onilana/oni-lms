@@ -74,6 +74,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
 
   // Create Form State
   const [createName, setCreateName] = useState('');
+  const [createUsername, setCreateUsername] = useState('');
   const [createEmail, setCreateEmail] = useState('');
   const [createPassword, setCreatePassword] = useState('Campus@2026!');
   const [createRole, setCreateRole] = useState('student');
@@ -88,6 +89,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
 
   // Edit Form State
   const [editName, setEditName] = useState('');
+  const [editUsername, setEditUsername] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [editStatus, setEditStatus] = useState('active');
   const [editRole, setEditRole] = useState('');
@@ -201,6 +203,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
         method: 'POST',
         body: JSON.stringify({
           name: createName,
+          username: createUsername.trim() || null,
           email: createEmail,
           password: createPassword,
           role: createRole,
@@ -231,6 +234,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
   const openEditModal = (u: User) => {
     setEditingUser(u);
     setEditName(u.name);
+    setEditUsername(u.username || '');
     setEditEmail(u.email);
     setEditStatus(u.status);
     setEditRole(u.roles[0]?.name || 'student');
@@ -251,6 +255,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
         method: 'PUT',
         body: JSON.stringify({
           name: editName,
+          username: editUsername.trim() || null,
           email: editEmail,
           status: editStatus,
           role: editRole,
@@ -657,7 +662,9 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                           ) : (
                             <strong>{u.name}</strong>
                           )}
-                          <small style={{ display: 'block', color: '#64748b' }}>{u.email}</small>
+                          <small style={{ display: 'block', color: '#64748b' }}>
+                            {u.email}{u.username ? ` · @${u.username}` : ''}
+                          </small>
                         </div>
                       </div>
                     </td>
@@ -798,7 +805,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
             </div>
 
             <form onSubmit={handleCreateUser} className="modal-form">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
                   <label>Full Name</label>
                   <input
@@ -806,6 +813,14 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                     placeholder="e.g. Eleanor Vance"
                     value={createName}
                     onChange={(e) => setCreateName(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Username (Optional)</label>
+                  <input
+                    placeholder="Auto-generated if blank"
+                    value={createUsername}
+                    onChange={(e) => setCreateUsername(e.target.value)}
                   />
                 </div>
                 <div className="form-group">
@@ -998,6 +1013,14 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                     required
                     value={editName}
                     onChange={(e) => setEditName(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Username</label>
+                  <input
+                    placeholder="e.g. stu_2026_001"
+                    value={editUsername}
+                    onChange={(e) => setEditUsername(e.target.value)}
                   />
                 </div>
                 <div className="form-group">

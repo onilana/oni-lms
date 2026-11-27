@@ -18,9 +18,13 @@ class AuthController
     public function login(LoginRequest $request): JsonResponse
     {
         $credentials = $request->validated();
+        $identifier = strtolower(trim((string) ($credentials['login'] ?? $credentials['username'] ?? $credentials['email'] ?? '')));
 
         $user = User::with(['roles.permissions'])
-            ->where('email', strtolower(trim($credentials['email'])))
+            ->where(function ($q) use ($identifier) {
+                $q->whereRaw('LOWER(email) = ?', [$identifier])
+                    ->orWhereRaw('LOWER(username) = ?', [$identifier]);
+            })
             ->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {

@@ -23,7 +23,7 @@ class AuthTest extends TestCase
     {
         $response = $this->postJson('/api/v1/auth/login', [
             'email' => 'admin@educare.edu',
-            'password' => 'OniAdmin@2026!',
+            'password' => 'Educare@2026',
             'device_name' => 'test-device',
         ]);
 
@@ -153,7 +153,7 @@ class AuthTest extends TestCase
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->postJson('/api/v1/auth/change-password', [
-                'current_password' => 'OniAdmin@2026!',
+                'current_password' => 'Educare@2026',
                 'new_password' => 'NewSecurePassword2026!',
                 'new_password_confirmation' => 'NewSecurePassword2026!',
             ]);
@@ -173,7 +173,7 @@ class AuthTest extends TestCase
         $loginResponse = $this->withHeader('Referer', 'http://localhost:5173')
             ->postJson('/api/v1/auth/login', [
                 'email' => 'admin@educare.edu',
-                'password' => 'OniAdmin@2026!',
+                'password' => 'Educare@2026',
                 'device_name' => 'browser',
             ]);
 
@@ -198,7 +198,7 @@ class AuthTest extends TestCase
 
         $loginResponse = $this->postJson('/api/v1/auth/login', [
             'email' => 'admin@educare.edu',
-            'password' => 'OniAdmin@2026!',
+            'password' => 'Educare@2026',
         ]);
 
         $loginResponse->assertStatus(200)
@@ -209,12 +209,57 @@ class AuthTest extends TestCase
 
         $this->withHeader('Authorization', 'Bearer ' . $token)
             ->postJson('/api/v1/auth/change-password', [
-                'current_password' => 'OniAdmin@2026!',
+                'current_password' => 'Educare@2026',
                 'new_password' => 'RotatedAdmin@2026!',
                 'new_password_confirmation' => 'RotatedAdmin@2026!',
             ])
             ->assertStatus(200);
 
         $this->assertFalse((bool) $user->fresh()->must_change_password);
+    }
+
+    public function test_super_admin_can_login_with_username_admin(): void
+    {
+        $response = $this->postJson('/api/v1/auth/login', [
+            'email' => 'admin',
+            'password' => 'Educare@2026',
+            'device_name' => 'test-device',
+        ]);
+
+        $response->assertStatus(200)
+            ->assertJsonPath('user.email', 'admin@educare.edu')
+            ->assertJsonPath('user.username', 'admin');
+    }
+
+    public function test_regular_users_can_login_with_either_username_or_email(): void
+    {
+        $admin = User::where('email', 'admin@educare.edu')->first();
+
+        $createRes = $this->actingAs($admin, 'sanctum')
+            ->postJson('/api/v1/users', [
+                'name' => 'Riya Sen',
+                'email' => 'riya.sen@educare.edu',
+                'password' => 'Student@2026!',
+                'role' => 'student',
+                'student_id_number' => 'STU-2026-777',
+            ])
+            ->assertStatus(201);
+
+        $generatedUsername = $createRes->json('data.username');
+        $this->assertNotEmpty($generatedUsername);
+
+        $this->app['auth']->forgetGuards();
+
+        // Login with username
+        $this->postJson('/api/v1/auth/login', [
+            'email' => $generatedUsername,
+            'password' => 'Student@2026!',
+        ])->assertStatus(200)->assertJsonPath('user.email', 'riya.sen@educare.edu');
+
+        // Login with email
+        $this->postJson('/api/v1/auth/login', [
+            'email' => 'riya.sen@educare.edu',
+            'password' => 'Student@2026!',
+        ])->assertStatus(200)->assertJsonPath('user.username', $generatedUsername);
     }
 }

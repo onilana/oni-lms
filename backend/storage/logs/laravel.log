@@ -11498,3 +11498,12 @@ LINE 1: ...t(*) from \"departments\" where \"programmes\".\"id\" = \"departmen..
 #67 /var/www/html/public/index.php(16): Illuminate\\Foundation\\Application->handleRequest(Object(Illuminate\\Http\\Request))
 #68 {main}
 "} 
+[2026-11-27 22:19:41] local.ERROR: Command "tinker" is not defined. {"exception":"[object] (Symfony\\Component\\Console\\Exception\\CommandNotFoundException(code: 0): Command \"tinker\" is not defined. at /var/www/html/vendor/symfony/console/Application.php:760)
+[stacktrace]
+#0 /var/www/html/vendor/symfony/console/Application.php(299): Symfony\\Component\\Console\\Application->find('tinker')
+#1 /var/www/html/vendor/symfony/console/Application.php(196): Symfony\\Component\\Console\\Application->doRun(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#2 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Console/Kernel.php(198): Symfony\\Component\\Console\\Application->run(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#3 /var/www/html/vendor/laravel/framework/src/Illuminate/Foundation/Application.php(1235): Illuminate\\Foundation\\Console\\Kernel->handle(Object(Symfony\\Component\\Console\\Input\\ArgvInput), Object(Symfony\\Component\\Console\\Output\\ConsoleOutput))
+#4 /var/www/html/artisan(13): Illuminate\\Foundation\\Application->handleCommand(Object(Symfony\\Component\\Console\\Input\\ArgvInput))
+#5 {main}
+"} 

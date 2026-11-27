@@ -177,12 +177,17 @@ class RoleAndPermissionSeeder extends Seeder
             ['email' => env('INITIAL_ADMIN_EMAIL', 'admin@educare.edu')],
             [
                 'name' => 'Super Administrator',
+                'username' => env('INITIAL_ADMIN_USERNAME', 'admin'),
                 'password' => Hash::make($adminPassword),
                 'status' => 'active',
                 'must_change_password' => app()->environment('production'),
                 'email_verified_at' => now(),
             ]
         );
+
+        if (empty($superAdmin->username)) {
+            $superAdmin->update(['username' => env('INITIAL_ADMIN_USERNAME', 'admin')]);
+        }
 
         if (! $superAdmin->hasRole(Role::SUPER_ADMIN)) {
             $superAdmin->roles()->syncWithoutDetaching([$roles[Role::SUPER_ADMIN]->id]);
@@ -198,6 +203,7 @@ class RoleAndPermissionSeeder extends Seeder
             ['email' => 'student@educare.edu'],
             [
                 'name' => 'Aarav Sharma',
+                'username' => 'student',
                 'password' => Hash::make($demoStudentPassword),
                 'status' => 'active',
                 'email_verified_at' => now(),
@@ -213,6 +219,7 @@ class RoleAndPermissionSeeder extends Seeder
             ['email' => 'teacher@educare.edu'],
             [
                 'name' => 'Dr. Priya Ramanathan',
+                'username' => 'teacher',
                 'password' => Hash::make($demoTeacherPassword),
                 'status' => 'active',
                 'email_verified_at' => now(),
@@ -228,6 +235,7 @@ class RoleAndPermissionSeeder extends Seeder
             ['email' => 'hod@educare.edu'],
             [
                 'name' => 'Prof. Vikram Sengupta',
+                'username' => 'hod',
                 'password' => Hash::make($demoHodPassword),
                 'status' => 'active',
                 'email_verified_at' => now(),

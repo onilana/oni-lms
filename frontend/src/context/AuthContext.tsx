@@ -40,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await ensureCsrfCookie();
     const response = await apiRequest<AuthResponse>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password, device_name: 'browser' }),
+      body: JSON.stringify({ email, login: email, password, device_name: 'browser' }),
     });
 
     setUser(response.user);

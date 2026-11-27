@@ -41,6 +41,7 @@ export interface StudentProfileInfo {
 export interface User {
   id: string;
   name: string;
+  username?: string | null;
   email: string;
   status: string;
   must_change_password?: boolean;
