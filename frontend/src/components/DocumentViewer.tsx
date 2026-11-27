@@ -133,6 +133,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
           const firstSheet = wb.SheetNames[0];
           setActiveSheet(firstSheet);
           const data: any[][] = XLSX.utils.sheet_to_json(wb.Sheets[firstSheet], { header: 1 });
+          setCurrentPage(1);
           setSheetData(data);
         }
         setLoading(false);
