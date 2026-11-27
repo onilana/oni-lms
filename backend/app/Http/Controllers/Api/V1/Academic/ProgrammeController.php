@@ -14,7 +14,11 @@ class ProgrammeController
     {
         $query = Programme::query()
             ->with('department')
-            ->withCount(['batches', 'students']);
+            ->withCount(['batches', 'students', 'departments']);
+
+        if ($request->filled('level')) {
+            $query->where('level', strtolower($request->query('level')));
+        }
 
         if ($request->filled('department_id')) {
             $query->where('department_id', $request->query('department_id'));

@@ -48,14 +48,14 @@ class AssignmentTest extends TestCase
         $session = AcademicSession::where('is_current', true)->first();
 
         // 1. Admin
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
         $this->adminToken = $this->admin->createToken('admin-token')->plainTextToken;
 
         // 2. Teacher
         $teacherRole = Role::where('name', Role::TEACHER)->first();
         $this->teacher = User::create([
             'name' => 'Prof. Edsger Dijkstra',
-            'email' => 'dijkstra@faculty.onilms.edu',
+            'email' => 'dijkstra@faculty.educare.edu',
             'password' => Hash::make('Teacher123!'),
             'status' => 'active',
         ]);
@@ -72,7 +72,7 @@ class AssignmentTest extends TestCase
         $studentRole = Role::where('name', Role::STUDENT)->first();
         $this->enrolledStudent = User::create([
             'name' => 'Donald Knuth',
-            'email' => 'knuth@student.onilms.edu',
+            'email' => 'knuth@student.educare.edu',
             'password' => Hash::make('Student123!'),
             'status' => 'active',
         ]);
@@ -89,7 +89,7 @@ class AssignmentTest extends TestCase
         // 4. Non-enrolled Student
         $this->nonEnrolledStudent = User::create([
             'name' => 'Linus Torvalds',
-            'email' => 'linus@student.onilms.edu',
+            'email' => 'linus@student.educare.edu',
             'password' => Hash::make('Student123!'),
             'status' => 'active',
         ]);

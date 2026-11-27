@@ -19,6 +19,7 @@ class Programme extends Model
 
     protected $fillable = [
         'department_id',
+        'level',
         'name',
         'code',
         'duration_years',
@@ -37,6 +38,11 @@ class Programme extends Model
     public function department(): BelongsTo
     {
         return $this->belongsTo(Department::class);
+    }
+
+    public function departments(): HasMany
+    {
+        return $this->hasMany(Department::class, 'programme_id');
     }
 
     public function batches(): HasMany

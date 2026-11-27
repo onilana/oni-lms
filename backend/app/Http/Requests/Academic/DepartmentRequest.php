@@ -23,6 +23,7 @@ class DepartmentRequest extends FormRequest
                 'exists:departments,id',
                 Rule::notIn($departmentId ? [$departmentId] : []),
             ],
+            'programme_id' => ['nullable', 'uuid', 'exists:programmes,id'],
             'name' => ['required', 'string', 'max:255'],
             'code' => [
                 'required',

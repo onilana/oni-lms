@@ -122,7 +122,7 @@ class LessonController
         }
 
         $request->validate([
-            'file' => ['required', 'file', 'max:25600'],
+            'file' => ['required', 'file', 'max:51200'],
         ]);
 
         $file = $request->file('file');

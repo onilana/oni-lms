@@ -1,4 +1,4 @@
-# ONI LMS — Project Context
+# Edu Care — Project Context
 Last updated: 18 November 2026
 
 ## Purpose
@@ -61,7 +61,7 @@ Suggested GitHub board: Backlog → Ready → In Progress → Code Review → QA
 Definition of done: committed code, validation, server-side authorization, tests, API docs where relevant, error handling, security review, code review, QA evidence.
 
 ## Current artifact status
-A starter ZIP named `ONI-LMS-Starter-Project.zip` was generated in this conversation. It contains an initial React dashboard, Laravel API foundation files, PostgreSQL/Redis configuration, Docker Compose/Nginx configuration, a health endpoint, an initial users migration and documentation.
+A starter ZIP named `EDU-CARE-Starter-Project.zip` was generated in this conversation. It contains an initial React dashboard, Laravel API foundation files, PostgreSQL/Redis configuration, Docker Compose/Nginx configuration, a health endpoint, an initial users migration and documentation.
 This is a scaffold, not the complete LMS. Functional modules are not yet implemented. No GitHub repository, production deployment, test run, security assessment, load test or college acceptance test has been verified. Before relying on it as runnable, audit and validate Laravel's standard project bootstrap/dependencies and Docker startup locally. Never claim tests pass unless actually run.
 
 ## Instructions for a VS Code coding assistant

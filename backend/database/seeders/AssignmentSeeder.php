@@ -12,7 +12,7 @@ class AssignmentSeeder extends Seeder
     public function run(): void
     {
         $dsa = Course::where('code', 'CS101')->first();
-        $admin = User::where('email', 'admin@onilms.edu')->first();
+        $admin = User::where('email', 'admin@educare.edu')->first();
 
         if (! $dsa || ! $admin) {
             return;

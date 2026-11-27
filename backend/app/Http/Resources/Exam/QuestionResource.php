@@ -21,13 +21,13 @@ class QuestionResource extends JsonResource
             if (! $includeSolutions) {
                 if ($this->pivot?->exam_id) {
                     $cacheKey = 'exam-solution-course-'.$this->pivot->exam_id;
-                    $cache = $request->attributes->get('_oni_lms_exam_solution_cache', []);
+                    $cache = $request->attributes->get('_edu_care_exam_solution_cache', []);
                     if (! array_key_exists($cacheKey, $cache)) {
                         $cache[$cacheKey] = Exam::query()
                             ->with('course')
                             ->whereKey($this->pivot->exam_id)
                             ->first()?->course;
-                        $request->attributes->set('_oni_lms_exam_solution_cache', $cache);
+                        $request->attributes->set('_edu_care_exam_solution_cache', $cache);
                     }
                     $course = $cache[$cacheKey];
                 } else {

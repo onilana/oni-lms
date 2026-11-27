@@ -36,7 +36,7 @@ class RbacPolicyTest extends TestCase
         parent::setUp();
         $this->seed(RoleAndPermissionSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
 
         $deptA = Department::create(['code' => 'CSE', 'name' => 'Computer Science', 'is_active' => true]);
         $deptB = Department::create(['code' => 'ECE', 'name' => 'Electronics', 'is_active' => true]);
@@ -51,7 +51,7 @@ class RbacPolicyTest extends TestCase
 
         $this->otherTeacher = User::create([
             'name' => 'Other Dept Teacher',
-            'email' => 'other.teacher@onilms.edu',
+            'email' => 'other.teacher@educare.edu',
             'password' => Hash::make('Secret123!'),
             'department_id' => $deptB->id,
             'status' => 'active',
@@ -60,7 +60,7 @@ class RbacPolicyTest extends TestCase
 
         $this->student = User::create([
             'name' => 'Student User',
-            'email' => 'student.rbac@onilms.edu',
+            'email' => 'student.rbac@educare.edu',
             'password' => Hash::make('Secret123!'),
             'status' => 'active',
         ]);
@@ -68,7 +68,7 @@ class RbacPolicyTest extends TestCase
 
         $this->supportStaff = User::create([
             'name' => 'Support User',
-            'email' => 'support.rbac@onilms.edu',
+            'email' => 'support.rbac@educare.edu',
             'password' => Hash::make('Secret123!'),
             'status' => 'active',
         ]);
@@ -192,5 +192,103 @@ class RbacPolicyTest extends TestCase
         $this->actingAs($this->supportStaff, 'sanctum')
             ->deleteJson('/api/v1/exams/' . $this->draftExam->id)
             ->assertStatus(403);
+    }
+
+    public function test_super_admin_has_global_gate_override_authority(): void
+    {
+        $this->assertTrue(\Illuminate\Support\Facades\Gate::forUser($this->admin)->allows('any-arbitrary-ability'));
+        $this->assertFalse(\Illuminate\Support\Facades\Gate::forUser($this->student)->allows('any-arbitrary-ability'));
+    }
+
+    public function test_super_admin_can_overwrite_existing_users_in_bulk_enroll_but_college_admin_cannot(): void
+    {
+        $collegeAdmin = User::create([
+            'name' => 'College Admin',
+            'email' => 'college.admin.rbac@educare.edu',
+            'password' => Hash::make('Secret123!'),
+            'status' => 'active',
+        ]);
+        $collegeAdmin->roles()->attach(Role::where('name', Role::COLLEGE_ADMIN)->first()->id);
+
+        // Non-super-admin cannot use overwrite
+        $this->actingAs($collegeAdmin, 'sanctum')
+            ->postJson('/api/v1/users/bulk-enroll', [
+                'overwrite' => true,
+                'users' => [
+                    ['name' => 'Hijacked Name', 'email' => $this->student->email, 'role' => 'student'],
+                ],
+            ])
+            ->assertStatus(403);
+
+        // Super admin can overwrite existing user
+        $this->app['auth']->forgetGuards();
+        $this->actingAs($this->admin, 'sanctum')
+            ->postJson('/api/v1/users/bulk-enroll', [
+                'overwrite' => true,
+                'users' => [
+                    ['name' => 'Overwritten Student Name', 'email' => $this->student->email, 'role' => 'student'],
+                ],
+            ])
+            ->assertStatus(200)
+            ->assertJsonPath('updated_count', 1);
+
+        $this->assertDatabaseHas('users', [
+            'id' => $this->student->id,
+            'name' => 'Overwritten Student Name',
+        ]);
+    }
+
+    public function test_non_super_admin_cannot_overwrite_super_admin_account(): void
+    {
+        $collegeAdmin = User::create([
+            'name' => 'College Admin',
+            'email' => 'college.admin.protect@educare.edu',
+            'password' => Hash::make('Secret123!'),
+            'status' => 'active',
+        ]);
+        $collegeAdmin->roles()->attach(Role::where('name', Role::COLLEGE_ADMIN)->first()->id);
+
+        $this->actingAs($collegeAdmin, 'sanctum')
+            ->putJson('/api/v1/users/' . $this->admin->id, [
+                'name' => 'Tampered Super Admin',
+            ])
+            ->assertStatus(403);
+
+        $this->actingAs($collegeAdmin, 'sanctum')
+            ->postJson('/api/v1/users/' . $this->admin->id . '/reset-password', [
+                'password' => 'NewSecret123!',
+            ])
+            ->assertStatus(403);
+
+        $this->actingAs($collegeAdmin, 'sanctum')
+            ->deleteJson('/api/v1/users/' . $this->admin->id)
+            ->assertStatus(403);
+    }
+
+    public function test_super_admin_can_update_student_details_even_with_blank_student_id(): void
+    {
+        $prog = Programme::first();
+        $deptId = $prog->department_id;
+
+        $this->actingAs($this->admin, 'sanctum')
+            ->putJson('/api/v1/users/' . $this->student->id, [
+                'name' => 'Updated Student Name',
+                'email' => $this->student->email,
+                'status' => 'active',
+                'role' => Role::STUDENT,
+                'department_id' => $deptId,
+                'employee_id_number' => null,
+                'designation' => null,
+                'programme_id' => $prog->id,
+                'batch_id' => null,
+                'student_id_number' => null,
+                'current_semester' => 2,
+            ])
+            ->assertStatus(200)
+            ->assertJsonPath('data.name', 'Updated Student Name')
+            ->assertJsonPath('data.student_profile.current_semester', 2);
+
+        $this->assertDatabaseMissing('teacher_profiles', ['user_id' => $this->student->id]);
+        $this->assertNotNull($this->student->fresh()->studentProfile->student_id_number);
     }
 }

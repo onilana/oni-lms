@@ -142,7 +142,7 @@ class CertificateService
             'credits' => $course->credits,
             'department' => $departmentName,
             'programme' => $programmeName,
-            'institution_name' => 'ONI Institute of Technology and Higher Education',
+            'institution_name' => 'Edu Care Institute and Higher Education',
             'issuer_name' => $issuer?->name ?? 'Academic Council & Examination Board',
             'signatory_role' => 'Controller of Examinations & Academic Dean',
             'verification_url' => url('/api/v1/certificates/verify/'),

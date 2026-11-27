@@ -42,7 +42,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose }) => {
       <div className="modal-dialog" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
           <div>
-            <h3>Sign in to ONI LMS</h3>
+            <h3>Sign in to Edu Care</h3>
             <p>Access your courses, grades, and academic administration</p>
           </div>
           <button className="btn-close" onClick={onClose} aria-label="Close modal">

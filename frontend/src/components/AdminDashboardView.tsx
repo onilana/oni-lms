@@ -35,7 +35,7 @@ interface AdminDashboardViewProps {
 type WidgetId = 'metrics' | 'health' | 'audit' | 'roles' | 'backup' | 'tools';
 
 const DEFAULT_WIDGET_ORDER: WidgetId[] = ['metrics', 'health', 'roles', 'audit', 'backup', 'tools'];
-const STORAGE_KEY = 'oni_lms_super_admin_dashboard_order';
+const STORAGE_KEY = 'edu_care_super_admin_dashboard_order';
 
 const WIDGET_TITLES: Record<WidgetId, string> = {
   metrics: 'Key Institutional KPI Metrics',

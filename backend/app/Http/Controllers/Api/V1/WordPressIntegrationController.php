@@ -28,7 +28,7 @@ class WordPressIntegrationController
         $courses = $service->getPublicCourseCatalogue();
 
         return response()->json([
-            'source' => 'ONI Learning Management System',
+            'source' => 'Edu Care Learning Management System',
             'count' => count($courses),
             'data' => $courses,
         ]);

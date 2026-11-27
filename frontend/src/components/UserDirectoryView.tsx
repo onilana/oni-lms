@@ -105,8 +105,9 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
   const [bulkDeptId, setBulkDeptId] = useState('');
   const [bulkProgId, setBulkProgId] = useState('');
   const [bulkCsvText, setBulkCsvText] = useState('');
+  const [bulkOverwrite, setBulkOverwrite] = useState(false);
   const [bulkLoading, setBulkLoading] = useState(false);
-  const [bulkResult, setBulkResult] = useState<{ imported_count: number; breakdown: Record<string, number>; errors: string[] } | null>(null);
+  const [bulkResult, setBulkResult] = useState<{ imported_count: number; updated_count?: number; breakdown: Record<string, number>; errors: string[] } | null>(null);
 
   const fetchUsers = async () => {
     setLoading(true);
@@ -347,11 +348,15 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
       const res = await apiRequest<{
         message: string;
         imported_count: number;
+        updated_count?: number;
         breakdown: Record<string, number>;
         errors: string[];
       }>('/users/bulk-enroll', {
         method: 'POST',
-        body: JSON.stringify({ users: parsedUsers }),
+        body: JSON.stringify({
+          users: parsedUsers,
+          overwrite: isSuperAdmin ? bulkOverwrite : false,
+        }),
       });
       setBulkResult(res);
       if (res.imported_count > 0) {
@@ -527,23 +532,25 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
 
           {/* Level Filter (Students) */}
           {activeSection === 'students' && (
-            <select value={levelFilter} onChange={(e) => setLevelFilter(e.target.value)}>
-              <option value="">All Degree Levels</option>
-              <option value="ug">Undergraduate (UG)</option>
-              <option value="pg">Postgraduate (PG)</option>
-              <option value="phd">Doctoral / Ph.D.</option>
-              <option value="diploma">Diploma / Associate</option>
+            <select value={levelFilter} onChange={(e) => { setLevelFilter(e.target.value); setProgFilter(''); }}>
+              <option value="">All Levels</option>
+              <option value="pg">PG (Postgraduate)</option>
+              <option value="ug">UG (Undergraduate)</option>
+              <option value="diploma">Diploma</option>
+              <option value="certificate">Certificate</option>
             </select>
           )}
 
           {/* Programme Filter (Students) */}
           {activeSection === 'students' && (
             <select value={progFilter} onChange={(e) => setProgFilter(e.target.value)}>
-              <option value="">All Degree Programmes</option>
+              <option value="">All Parent Programmes</option>
               {programmes
-                .filter((p) => !deptFilter || p.department_id === deptFilter)
+                .filter((p) => (!levelFilter || (p.level || 'ug') === levelFilter))
                 .map((p) => (
-                  <option key={p.id} value={p.id}>{p.name} ({p.code})</option>
+                  <option key={p.id} value={p.id}>
+                    [{(p.level || 'ug').toUpperCase()}] {p.name} ({p.code})
+                  </option>
                 ))}
             </select>
           )}
@@ -806,7 +813,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                   <input
                     type="email"
                     required
-                    placeholder="e.g. eleanor.vance@onilms.edu"
+                    placeholder="e.g. eleanor.vance@educare.edu"
                     value={createEmail}
                     onChange={(e) => setCreateEmail(e.target.value)}
                   />
@@ -880,7 +887,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                           const pId = e.target.value;
                           setCreateProgId(pId);
                           const prog = programmes.find((p) => p.id === pId);
-                          if (prog && !createDeptId) setCreateDeptId(prog.department_id);
+                          if (prog?.department_id && !createDeptId) setCreateDeptId(prog.department_id);
                         }}
                       >
                         <option value="">Select Programme...</option>
@@ -1035,36 +1042,41 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                   <h4 style={{ fontSize: '14px', marginBottom: '10px' }}>Student Academic &amp; Programme Assignment</h4>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginBottom: '10px' }}>
                     <div className="form-group">
-                      <label>Department</label>
-                      <select
-                        value={editDeptId}
-                        onChange={(e) => {
-                          const dId = e.target.value;
-                          setEditDeptId(dId);
-                          const deProg = programmes.find((p) => p.department_id === dId);
-                          if (deProg) setEditProgId(deProg.id);
-                        }}
-                      >
-                        <option value="">Select Department...</option>
-                        {departments.map((d) => (
-                          <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="form-group">
-                      <label>Degree Programme</label>
+                      <label>Parent Programme (Level → Programme)</label>
                       <select
                         value={editProgId}
                         onChange={(e) => {
                           const pId = e.target.value;
                           setEditProgId(pId);
                           const prog = programmes.find((p) => p.id === pId);
-                          if (prog) setEditDeptId(prog.department_id);
+                          const matchingDept = departments.find((d) => d.programme_id === pId);
+                          if (matchingDept) {
+                            setEditDeptId(matchingDept.id);
+                          } else if (prog?.department_id && !editDeptId) {
+                            setEditDeptId(prog.department_id);
+                          }
                         }}
                       >
                         <option value="">Select Programme...</option>
-                        {(editDeptId ? programmes.filter((p) => p.department_id === editDeptId) : programmes).map((p) => (
-                          <option key={p.id} value={p.id}>{p.code}: {p.name}</option>
+                        {programmes.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            [{(p.level || 'ug').toUpperCase()}] {p.name} ({p.code})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group">
+                      <label>Department</label>
+                      <select
+                        value={editDeptId}
+                        onChange={(e) => setEditDeptId(e.target.value)}
+                      >
+                        <option value="">Select Department...</option>
+                        {(editProgId && departments.some((d) => d.programme_id === editProgId)
+                          ? departments.filter((d) => d.programme_id === editProgId)
+                          : departments
+                        ).map((d) => (
+                          <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
                         ))}
                       </select>
                     </div>
@@ -1238,7 +1250,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                       const pId = e.target.value;
                       setBulkProgId(pId);
                       const prog = programmes.find((p) => p.id === pId);
-                      if (prog && !bulkDeptId) setBulkDeptId(prog.department_id);
+                      if (prog?.department_id && !bulkDeptId) setBulkDeptId(prog.department_id);
                     }}
                   >
                     <option value="">— Select Programme (or specify per row) —</option>
@@ -1257,13 +1269,13 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                     className="btn btn-link btn-sm"
                     onClick={() => {
                       if (bulkRole === 'student') {
-                        setBulkCsvText("Name, Email, Student_ID\nAarav Sharma, aarav.s@onilms.edu, STU-2026-001\nDiya Patel, diya.p@onilms.edu, STU-2026-002");
+                        setBulkCsvText("Name, Email, Student_ID\nAarav Sharma, aarav.s@educare.edu, STU-2026-001\nDiya Patel, diya.p@educare.edu, STU-2026-002");
                       } else if (bulkRole === 'hod') {
-                        setBulkCsvText("Name, Email, Employee_ID\nDr. Marcus Vance, marcus.v@onilms.edu, FAC-2026-HOD1");
+                        setBulkCsvText("Name, Email, Employee_ID\nDr. Marcus Vance, marcus.v@educare.edu, FAC-2026-HOD1");
                       } else if (bulkRole === 'college_admin') {
-                        setBulkCsvText("Name, Email\nDean Robert Miller, dean.miller@onilms.edu");
+                        setBulkCsvText("Name, Email\nDean Robert Miller, dean.miller@educare.edu");
                       } else {
-                        setBulkCsvText("Name, Email, Employee_ID\nProf. Sarah Jenkins, sarah.j@onilms.edu, FAC-2026-011\nDr. Alan Turing, alan.t@onilms.edu, FAC-2026-012");
+                        setBulkCsvText("Name, Email, Employee_ID\nProf. Sarah Jenkins, sarah.j@educare.edu, FAC-2026-011\nDr. Alan Turing, alan.t@educare.edu, FAC-2026-012");
                       }
                     }}
                   >
@@ -1273,7 +1285,7 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                 <textarea
                   rows={6}
                   required
-                  placeholder="Paste CSV rows here. Example:&#10;John Doe, john@onilms.edu, STU-001&#10;Jane Smith, jane@onilms.edu, STU-002"
+                  placeholder="Paste CSV rows here. Example:&#10;John Doe, john@educare.edu, STU-001&#10;Jane Smith, jane@educare.edu, STU-002"
                   value={bulkCsvText}
                   onChange={(e) => setBulkCsvText(e.target.value)}
                   style={{ fontFamily: 'monospace', fontSize: '13px' }}
@@ -1300,9 +1312,25 @@ export const UserDirectoryView: React.FC<UserDirectoryViewProps> = ({ initialSec
                 />
               </div>
 
+              {isSuperAdmin && (
+                <div className="form-group" style={{ background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: '8px', padding: '10px 12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', margin: 0, color: '#9a3412', fontWeight: 600 }}>
+                    <input
+                      type="checkbox"
+                      checked={bulkOverwrite}
+                      onChange={(e) => setBulkOverwrite(e.target.checked)}
+                    />
+                    <span>Overwrite existing users if email already exists (Super Admin Authority)</span>
+                  </label>
+                </div>
+              )}
+
               {bulkResult && (
                 <div className="alert alert-success" style={{ marginBottom: '12px' }}>
-                  <p><strong>{bulkResult.imported_count}</strong> user(s) successfully enrolled!</p>
+                  <p>
+                    <strong>{bulkResult.imported_count}</strong> user(s) successfully processed
+                    {bulkResult.updated_count ? ` (${bulkResult.updated_count} overwritten)` : ''}!
+                  </p>
                   {bulkResult.breakdown && Object.keys(bulkResult.breakdown).length > 0 && (
                     <small style={{ display: 'block', marginTop: '4px' }}>
                       Breakdown: {Object.entries(bulkResult.breakdown).map(([r, count]) => `${r}: ${count}`).join(', ')}

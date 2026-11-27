@@ -8,6 +8,8 @@ use App\Http\Resources\Course\CourseInstructorResource;
 use App\Http\Resources\Course\CourseResource;
 use App\Models\Course;
 use App\Models\CourseInstructor;
+use App\Models\CourseSection;
+use App\Models\Lesson;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
@@ -82,6 +84,59 @@ class CourseController
             ], [
                 'role' => 'lead',
             ]);
+        }
+
+        // Automatically provision an initial CourseSection & Lessons from attached media / video link
+        $materials = $data['materials'] ?? [];
+        $videoUrl = $data['video_url'] ?? null;
+        if (! empty($materials) || ! empty($videoUrl)) {
+            $section = CourseSection::create([
+                'course_id' => $course->id,
+                'title' => 'Course Materials & Media',
+                'description' => 'Initial documents, images, and video resources added during course setup.',
+                'order_index' => 1,
+                'status' => 'published',
+            ]);
+
+            $order = 1;
+            if (! empty($videoUrl)) {
+                Lesson::create([
+                    'course_id' => $course->id,
+                    'section_id' => $section->id,
+                    'title' => 'Course Introduction Video',
+                    'type' => 'video',
+                    'video_url' => $videoUrl,
+                    'order_index' => $order++,
+                    'status' => 'published',
+                ]);
+            }
+
+            $lessonTypeMap = [
+                'pdf' => 'pdf',
+                'docx' => 'word',
+                'excel' => 'spreadsheet',
+                'image' => 'link',
+                'video' => 'video',
+                'video_embed' => 'video',
+            ];
+
+            foreach ($materials as $item) {
+                $matType = $item['type'] ?? 'pdf';
+                $lessonType = $lessonTypeMap[$matType] ?? 'doc';
+                $isVideo = in_array($matType, ['video', 'video_embed'], true);
+
+                Lesson::create([
+                    'course_id' => $course->id,
+                    'section_id' => $section->id,
+                    'title' => $item['title'] ?? ($item['name'] ?? 'Course Resource'),
+                    'type' => $lessonType,
+                    'video_url' => $isVideo ? ($item['url'] ?? null) : null,
+                    'attachment_path' => $isVideo ? null : ($item['url'] ?? null),
+                    'attachment_name' => $item['name'] ?? ($item['title'] ?? 'resource'),
+                    'order_index' => $order++,
+                    'status' => 'published',
+                ]);
+            }
         }
 
         $course->load(['department', 'programme', 'instructors.user'])->loadCount('enrolments');

@@ -123,7 +123,7 @@ class AiAssistantController
             'data' => [
                 'total_conversations' => $conversationsCount,
                 'total_tokens_consumed' => (int) $totalTokens,
-                'model_name' => 'oni-rag-tutor-v1',
+                'model_name' => 'edu-care-tutor-v1',
                 'quota_limit' => 500000,
                 'remaining_quota' => max(0, 500000 - (int) $totalTokens),
             ],

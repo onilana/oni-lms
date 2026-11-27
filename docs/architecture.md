@@ -1,4 +1,4 @@
-# ONI LMS Architecture Notes
+# Edu Care Architecture Notes
 
 ## System boundaries
 

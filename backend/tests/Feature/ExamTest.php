@@ -39,12 +39,12 @@ class ExamTest extends TestCase
         $studentRole = Role::where('name', Role::STUDENT)->first();
 
         $this->teacher = User::factory()->create([
-            'email' => 'teacher_exam@onilms.edu',
+            'email' => 'teacher_exam@educare.edu',
         ]);
         $this->teacher->roles()->attach($teacherRole->id);
 
         $this->student = User::factory()->create([
-            'email' => 'student_exam@onilms.edu',
+            'email' => 'student_exam@educare.edu',
         ]);
         $this->student->roles()->attach($studentRole->id);
 

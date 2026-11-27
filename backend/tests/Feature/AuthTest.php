@@ -22,7 +22,7 @@ class AuthTest extends TestCase
     public function test_user_can_login_with_valid_credentials_and_receives_token(): void
     {
         $response = $this->postJson('/api/v1/auth/login', [
-            'email' => 'admin@onilms.edu',
+            'email' => 'admin@educare.edu',
             'password' => 'OniAdmin@2026!',
             'device_name' => 'test-device',
         ]);
@@ -43,13 +43,13 @@ class AuthTest extends TestCase
 
         $this->assertNotEmpty($response->json('token'));
         $this->assertSame('Bearer', $response->json('token_type'));
-        $this->assertSame('admin@onilms.edu', $response->json('user.email'));
+        $this->assertSame('admin@educare.edu', $response->json('user.email'));
     }
 
     public function test_login_fails_with_invalid_credentials(): void
     {
         $response = $this->postJson('/api/v1/auth/login', [
-            'email' => 'admin@onilms.edu',
+            'email' => 'admin@educare.edu',
             'password' => 'WrongPassword123!',
         ]);
 
@@ -60,13 +60,13 @@ class AuthTest extends TestCase
     public function test_inactive_user_cannot_login(): void
     {
         $inactive = User::factory()->create([
-            'email' => 'inactive@onilms.edu',
+            'email' => 'inactive@educare.edu',
             'password' => Hash::make('Secret123!'),
             'status' => 'inactive',
         ]);
 
         $response = $this->postJson('/api/v1/auth/login', [
-            'email' => 'inactive@onilms.edu',
+            'email' => 'inactive@educare.edu',
             'password' => 'Secret123!',
         ]);
 
@@ -78,19 +78,19 @@ class AuthTest extends TestCase
 
     public function test_authenticated_user_can_retrieve_profile_via_me(): void
     {
-        $user = User::where('email', 'admin@onilms.edu')->first();
+        $user = User::where('email', 'admin@educare.edu')->first();
         $token = $user->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
             ->getJson('/api/v1/auth/me');
 
         $response->assertStatus(200)
-            ->assertJsonPath('user.email', 'admin@onilms.edu');
+            ->assertJsonPath('user.email', 'admin@educare.edu');
     }
 
     public function test_user_can_logout_and_token_is_revoked(): void
     {
-        $user = User::where('email', 'admin@onilms.edu')->first();
+        $user = User::where('email', 'admin@educare.edu')->first();
         $token = $user->createToken('test')->plainTextToken;
 
         $logoutResponse = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -111,7 +111,7 @@ class AuthTest extends TestCase
 
     public function test_super_admin_can_access_roles_endpoint(): void
     {
-        $admin = User::where('email', 'admin@onilms.edu')->first();
+        $admin = User::where('email', 'admin@educare.edu')->first();
         $token = $admin->createToken('admin')->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -131,7 +131,7 @@ class AuthTest extends TestCase
 
         $student = User::create([
             'name' => 'Alice Student',
-            'email' => 'alice@student.onilms.edu',
+            'email' => 'alice@student.educare.edu',
             'password' => Hash::make('StudentPass123!'),
             'status' => 'active',
         ]);
@@ -148,7 +148,7 @@ class AuthTest extends TestCase
 
     public function test_user_can_change_password(): void
     {
-        $user = User::where('email', 'admin@onilms.edu')->first();
+        $user = User::where('email', 'admin@educare.edu')->first();
         $token = $user->createToken('test')->plainTextToken;
 
         $response = $this->withHeader('Authorization', 'Bearer '.$token)
@@ -172,18 +172,18 @@ class AuthTest extends TestCase
 
         $loginResponse = $this->withHeader('Referer', 'http://localhost:5173')
             ->postJson('/api/v1/auth/login', [
-                'email' => 'admin@onilms.edu',
+                'email' => 'admin@educare.edu',
                 'password' => 'OniAdmin@2026!',
                 'device_name' => 'browser',
             ]);
 
         $loginResponse->assertStatus(200)
-            ->assertJsonPath('user.email', 'admin@onilms.edu');
+            ->assertJsonPath('user.email', 'admin@educare.edu');
 
         $this->withHeader('Referer', 'http://localhost:5173')
             ->getJson('/api/v1/auth/me')
             ->assertStatus(200)
-            ->assertJsonPath('user.email', 'admin@onilms.edu');
+            ->assertJsonPath('user.email', 'admin@educare.edu');
 
         $this->withHeader('Referer', 'http://localhost:5173')
             ->postJson('/api/v1/auth/logout')
@@ -193,11 +193,11 @@ class AuthTest extends TestCase
 
     public function test_must_change_password_is_flagged_on_login_and_cleared_on_password_change(): void
     {
-        $user = User::where('email', 'admin@onilms.edu')->first();
+        $user = User::where('email', 'admin@educare.edu')->first();
         $user->forceFill(['must_change_password' => true])->save();
 
         $loginResponse = $this->postJson('/api/v1/auth/login', [
-            'email' => 'admin@onilms.edu',
+            'email' => 'admin@educare.edu',
             'password' => 'OniAdmin@2026!',
         ]);
 

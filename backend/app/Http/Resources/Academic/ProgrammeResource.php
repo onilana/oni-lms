@@ -11,6 +11,7 @@ class ProgrammeResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'level' => $this->level ?? 'ug',
             'department_id' => $this->department_id,
             'department_name' => $this->department?->name,
             'name' => $this->name,
@@ -18,6 +19,7 @@ class ProgrammeResource extends JsonResource
             'duration_years' => $this->duration_years,
             'total_semesters' => $this->total_semesters,
             'status' => $this->status,
+            'departments_count' => $this->whenCounted('departments'),
             'batches_count' => $this->whenCounted('batches'),
             'students_count' => $this->whenCounted('students'),
             'created_at' => $this->created_at?->toIso8601String(),

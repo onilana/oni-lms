@@ -413,7 +413,7 @@ export const WordPressIntegrationView: React.FC<WordPressIntegrationViewProps> =
           {/* Snippet 2 */}
           <div style={{ marginTop: 24 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <strong>2. Course Catalogue Shortcode (<code style={{ fontSize: '0.8rem' }}>[oni_course_catalogue]</code>)</strong>
+              <strong>2. Course Catalogue Shortcode (<code style={{ fontSize: '0.8rem' }}>[edu_care_course_catalogue]</code>)</strong>
               <button
                 className="btn btn-outline btn-sm"
                 onClick={() => handleCopy(snippets.snippets.catalogue_shortcode_php, 'shortcode')}

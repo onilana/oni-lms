@@ -69,7 +69,7 @@ class LiveSession extends Model
             // Auto-generate Jitsi Meet URL if empty
             if (empty($session->meeting_url) && $session->provider === self::PROVIDER_JITSI) {
                 $safeCourse = $session->course?->code ? Str::slug($session->course->code) : 'class';
-                $session->meeting_url = 'https://meet.jit.si/ONI-LMS-' . $safeCourse . '-' . Str::random(10);
+                $session->meeting_url = 'https://meet.jit.si/EDU-CARE-' . $safeCourse . '-' . Str::random(10);
             }
         });
     }

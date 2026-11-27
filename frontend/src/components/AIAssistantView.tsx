@@ -365,7 +365,7 @@ export const AIAssistantView: React.FC<AIAssistantViewProps> = ({ currentUser })
                   {currentConversation?.title || (currentCourse ? `AI Tutor · ${currentCourse.code}` : 'AI Academic Tutor')}
                 </h3>
                 <small className="text-muted">
-                  Model: oni-rag-tutor-v1 &bull; Grounded in Course Content
+                  Model: edu-care-tutor-v1 &bull; Grounded in Course Content
                 </small>
               </div>
             </div>

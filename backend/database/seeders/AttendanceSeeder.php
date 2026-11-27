@@ -13,8 +13,8 @@ class AttendanceSeeder extends Seeder
 {
     public function run(): void
     {
-        $teacher = User::where('email', 'admin@onilms.edu')->first();
-        $student = User::where('email', 'student@onilms.edu')->first();
+        $teacher = User::where('email', 'admin@educare.edu')->first();
+        $student = User::where('email', 'student@educare.edu')->first();
         $course = Course::where('code', 'CS101')->first();
         $academicSession = AcademicSession::where('is_current', true)->first();
 

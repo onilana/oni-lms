@@ -10,7 +10,7 @@ return [
     'table' => env('SESSION_TABLE', 'sessions'),
     'store' => env('SESSION_STORE'),
     'lottery' => [2, 100],
-    'cookie' => env('SESSION_COOKIE', 'oni_lms_session'),
+    'cookie' => env('SESSION_COOKIE', 'edu_care_session'),
     'path' => '/',
     'domain' => env('SESSION_DOMAIN'),
     'secure' => env('SESSION_SECURE_COOKIE'),

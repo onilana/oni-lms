@@ -36,9 +36,9 @@ class CertificateTest extends TestCase
         parent::setUp();
         $this->seed(RoleAndPermissionSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
 
-        $this->student = User::where('email', 'student@onilms.edu')->first();
+        $this->student = User::where('email', 'student@educare.edu')->first();
 
         $this->teacher = User::factory()->create(['name' => 'Prof. Alan Turing']);
         $this->teacher->roles()->attach(Role::where('name', Role::TEACHER)->first()->id);
@@ -100,7 +100,7 @@ class CertificateTest extends TestCase
             'final_score' => 98.50,
             'attendance_percentage' => 88.00,
             'metadata' => [
-                'institution_name' => 'ONI Institute of Technology',
+                'institution_name' => 'Edu Care Institute',
             ],
         ]);
 

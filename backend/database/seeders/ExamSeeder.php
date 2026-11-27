@@ -15,7 +15,7 @@ class ExamSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::where('email', 'admin@onilms.edu')->first();
+        $admin = User::where('email', 'admin@educare.edu')->first();
         if (!$admin) {
             return;
         }

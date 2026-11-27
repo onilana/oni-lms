@@ -14,7 +14,16 @@ class DepartmentController
     {
         $query = Department::query()
             ->withCount(['programmes', 'teachers'])
-            ->with(['headOfDepartment', 'parent', 'subDepartments']);
+            ->with(['headOfDepartment', 'parent', 'subDepartments', 'programme']);
+
+        if ($request->filled('programme_id')) {
+            $query->where('programme_id', $request->query('programme_id'));
+        }
+
+        if ($request->filled('level')) {
+            $level = strtolower($request->query('level'));
+            $query->whereHas('programme', fn ($pq) => $pq->where('level', $level));
+        }
 
         if ($request->has('status')) {
             $query->where('status', $request->query('status'));
@@ -30,7 +39,7 @@ class DepartmentController
     public function store(DepartmentRequest $request): JsonResponse
     {
         $department = Department::create($request->validated());
-        $department->load(['headOfDepartment', 'parent', 'subDepartments']);
+        $department->load(['headOfDepartment', 'parent', 'subDepartments', 'programme']);
 
         return response()->json([
             'message' => 'Department created successfully.',
@@ -40,7 +49,7 @@ class DepartmentController
 
     public function show(Department $department): JsonResponse
     {
-        $department->load(['headOfDepartment', 'programmes', 'parent', 'subDepartments'])
+        $department->load(['headOfDepartment', 'programmes', 'parent', 'subDepartments', 'programme'])
             ->loadCount(['programmes', 'teachers']);
 
         return response()->json([
@@ -51,7 +60,7 @@ class DepartmentController
     public function update(DepartmentRequest $request, Department $department): JsonResponse
     {
         $department->update($request->validated());
-        $department->load(['headOfDepartment', 'parent', 'subDepartments']);
+        $department->load(['headOfDepartment', 'parent', 'subDepartments', 'programme']);
 
         return response()->json([
             'message' => 'Department updated successfully.',

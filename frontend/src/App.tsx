@@ -126,7 +126,7 @@ function MainApp() {
         <div className="brand">
           <span className="brand-mark">O</span>
           <div>
-            <strong>ONI LMS</strong>
+            <strong>Edu Care</strong>
             <small>College Learning Portal</small>
           </div>
         </div>
@@ -529,7 +529,7 @@ function MainApp() {
       </>
     )}
 
-        <p className="footnote">ONI Learning Management System · College Technical Blueprint Architecture v1.0 Operational</p>
+        <p className="footnote">Edu Care Learning Management System · College Technical Blueprint Architecture v1.0 Operational</p>
       </main>
 
       <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />

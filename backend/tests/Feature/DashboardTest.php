@@ -26,9 +26,9 @@ class DashboardTest extends TestCase
         $this->seed(AcademicSeeder::class);
         $this->seed(CourseSeeder::class);
 
-        $this->student = User::where('email', 'student@onilms.edu')->firstOrFail();
-        $this->teacher = User::where('email', 'teacher@onilms.edu')->firstOrFail();
-        $this->admin = User::where('email', 'admin@onilms.edu')->firstOrFail();
+        $this->student = User::where('email', 'student@educare.edu')->firstOrFail();
+        $this->teacher = User::where('email', 'teacher@educare.edu')->firstOrFail();
+        $this->admin = User::where('email', 'admin@educare.edu')->firstOrFail();
     }
 
     public function test_student_can_fetch_student_dashboard(): void
@@ -38,7 +38,7 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('student.name', 'Aarav Sharma')
-            ->assertJsonPath('student.email', 'student@onilms.edu')
+            ->assertJsonPath('student.email', 'student@educare.edu')
             ->assertJsonStructure([
                 'student' => [
                     'name',
@@ -72,7 +72,7 @@ class DashboardTest extends TestCase
 
         $response->assertStatus(200)
             ->assertJsonPath('teacher.name', 'Dr. Priya Ramanathan')
-            ->assertJsonPath('teacher.email', 'teacher@onilms.edu')
+            ->assertJsonPath('teacher.email', 'teacher@educare.edu')
             ->assertJsonStructure([
                 'teacher' => [
                     'name',

@@ -28,13 +28,13 @@ class AcademicStructureTest extends TestCase
         $this->seed(RoleAndPermissionSeeder::class);
         $this->seed(AcademicSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
         $this->adminToken = $this->admin->createToken('admin-token')->plainTextToken;
 
         $studentRole = Role::where('name', Role::STUDENT)->first();
         $this->student = User::create([
             'name' => 'John Student',
-            'email' => 'john@student.onilms.edu',
+            'email' => 'john@student.educare.edu',
             'password' => Hash::make('Secret123!'),
             'status' => 'active',
         ]);
@@ -62,7 +62,7 @@ class AcademicStructureTest extends TestCase
             ]);
 
         $this->assertCount(Department::count(), $response->json('departments'));
-        $this->assertGreaterThanOrEqual(15, count($response->json('departments')));
+        $this->assertGreaterThanOrEqual(14, count($response->json('departments')));
     }
 
     public function test_admin_can_create_department(): void

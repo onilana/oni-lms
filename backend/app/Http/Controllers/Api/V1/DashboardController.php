@@ -39,7 +39,7 @@ class DashboardController
         // and has no enrolled courses, fall back to demo student
         $targetUser = $user;
         if ($user->enrolledCourses()->count() === 0 && ($user->isSuperAdmin() || $user->hasRole('teacher') || $user->hasRole('hod'))) {
-            $demo = User::where('email', 'student@onilms.edu')->first();
+            $demo = User::where('email', 'student@educare.edu')->first();
             if ($demo && $demo->enrolledCourses()->count() > 0) {
                 $targetUser = $demo;
             }
@@ -268,7 +268,7 @@ class DashboardController
         // Target teacher
         $targetUser = $user;
         if (! $user->hasRole([Role::TEACHER, Role::HOD, Role::DEPT_ADMIN])) {
-            $demo = User::where('email', 'teacher@onilms.edu')->first();
+            $demo = User::where('email', 'teacher@educare.edu')->first();
             if ($demo) {
                 $targetUser = $demo;
             }

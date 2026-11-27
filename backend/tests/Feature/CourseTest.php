@@ -33,14 +33,14 @@ class CourseTest extends TestCase
         $this->seed(AcademicSeeder::class);
         $this->seed(CourseSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
         $this->adminToken = $this->admin->createToken('admin-token')->plainTextToken;
 
         // Teacher
         $teacherRole = Role::where('name', Role::TEACHER)->first();
         $this->teacher = User::create([
             'name' => 'Prof. Alan Turing',
-            'email' => 'turing@faculty.onilms.edu',
+            'email' => 'turing@faculty.educare.edu',
             'password' => Hash::make('Teacher123!'),
             'status' => 'active',
         ]);
@@ -51,7 +51,7 @@ class CourseTest extends TestCase
         $studentRole = Role::where('name', Role::STUDENT)->first();
         $this->student = User::create([
             'name' => 'Grace Hopper',
-            'email' => 'grace@student.onilms.edu',
+            'email' => 'grace@student.educare.edu',
             'password' => Hash::make('Student123!'),
             'status' => 'active',
         ]);
@@ -233,7 +233,7 @@ class CourseTest extends TestCase
         $otherStudentRole = Role::where('name', Role::STUDENT)->first();
         $otherStudent = User::create([
             'name' => 'Ada Lovelace',
-            'email' => 'ada@student.onilms.edu',
+            'email' => 'ada@student.educare.edu',
             'password' => Hash::make('Student123!'),
             'status' => 'active',
         ]);

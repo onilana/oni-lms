@@ -25,12 +25,20 @@ export const AcademicView: React.FC = () => {
     hasRole('dept_admin') ||
     hasRole('hod');
 
-  const [activeTab, setActiveTab] = useState<'departments' | 'programmes' | 'sessions' | 'batches'>('departments');
+  const [activeTab, setActiveTab] = useState<'departments' | 'programmes' | 'sessions' | 'batches'>('programmes');
+  const [levelFilter, setLevelFilter] = useState<'all' | 'pg' | 'ug' | 'diploma' | 'certificate'>('all');
   const [deptFilterType, setDeptFilterType] = useState<'all' | 'parent' | 'sub'>('all');
   const [departments, setDepartments] = useState<Department[]>([]);
   const [programmes, setProgrammes] = useState<Programme[]>([]);
   const [sessions, setSessions] = useState<AcademicSession[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+
+  const LEVEL_LABELS: Record<string, string> = {
+    pg: 'PG',
+    ug: 'UG',
+    diploma: 'Diploma',
+    certificate: 'Certificate',
+  };
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,13 +49,15 @@ export const AcademicView: React.FC = () => {
   const [deptCode, setDeptCode] = useState('');
   const [deptDesc, setDeptDesc] = useState('');
   const [deptParentId, setDeptParentId] = useState('');
+  const [deptProgrammeId, setDeptProgrammeId] = useState('');
 
   const [isProgModalOpen, setIsProgModalOpen] = useState(false);
+  const [progLevel, setProgLevel] = useState<'pg' | 'ug' | 'diploma' | 'certificate'>('ug');
   const [progDeptId, setProgDeptId] = useState('');
   const [progName, setProgName] = useState('');
   const [progCode, setProgCode] = useState('');
-  const [progYears, setProgYears] = useState(4);
-  const [progSems, setProgSems] = useState(8);
+  const [progYears, setProgYears] = useState(3);
+  const [progSems, setProgSems] = useState(6);
 
   // Edit Department modal
   const [editingDept, setEditingDept] = useState<Department | null>(null);
@@ -56,14 +66,16 @@ export const AcademicView: React.FC = () => {
   const [editDeptDesc, setEditDeptDesc] = useState('');
   const [editDeptStatus, setEditDeptStatus] = useState('active');
   const [editDeptParentId, setEditDeptParentId] = useState('');
+  const [editDeptProgrammeId, setEditDeptProgrammeId] = useState('');
 
   // Edit Programme modal
   const [editingProg, setEditingProg] = useState<Programme | null>(null);
+  const [editProgLevel, setEditProgLevel] = useState<'pg' | 'ug' | 'diploma' | 'certificate'>('ug');
   const [editProgDeptId, setEditProgDeptId] = useState('');
   const [editProgName, setEditProgName] = useState('');
   const [editProgCode, setEditProgCode] = useState('');
-  const [editProgYears, setEditProgYears] = useState(4);
-  const [editProgSems, setEditProgSems] = useState(8);
+  const [editProgYears, setEditProgYears] = useState(3);
+  const [editProgSems, setEditProgSems] = useState(6);
   const [editProgStatus, setEditProgStatus] = useState('active');
 
   // Semester modals (Edit & Create)
@@ -98,9 +110,6 @@ export const AcademicView: React.FC = () => {
       setProgrammes(progRes.programmes);
       setSessions(sessRes.sessions);
       setBatches(batchRes.batches);
-      if (deptRes.departments.length > 0 && !progDeptId) {
-        setProgDeptId(deptRes.departments[0].id);
-      }
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.message);
@@ -126,6 +135,7 @@ export const AcademicView: React.FC = () => {
           code: deptCode,
           description: deptDesc,
           parent_id: deptParentId || null,
+          programme_id: deptProgrammeId || null,
           status: 'active',
         }),
       });
@@ -134,6 +144,7 @@ export const AcademicView: React.FC = () => {
       setDeptCode('');
       setDeptDesc('');
       setDeptParentId('');
+      setDeptProgrammeId('');
       await fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating department');
@@ -146,7 +157,8 @@ export const AcademicView: React.FC = () => {
       await apiRequest('/academic/programmes', {
         method: 'POST',
         body: JSON.stringify({
-          department_id: progDeptId,
+          level: progLevel,
+          department_id: progDeptId || null,
           name: progName,
           code: progCode,
           duration_years: progYears,
@@ -157,6 +169,7 @@ export const AcademicView: React.FC = () => {
       setIsProgModalOpen(false);
       setProgName('');
       setProgCode('');
+      setProgDeptId('');
       await fetchData();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating programme');
@@ -170,6 +183,7 @@ export const AcademicView: React.FC = () => {
     setEditDeptDesc(dept.description || '');
     setEditDeptStatus(dept.status || 'active');
     setEditDeptParentId(dept.parent_id || '');
+    setEditDeptProgrammeId(dept.programme_id || '');
   };
 
   const handleUpdateDepartment = async (e: React.FormEvent) => {
@@ -184,6 +198,7 @@ export const AcademicView: React.FC = () => {
           description: editDeptDesc,
           status: editDeptStatus,
           parent_id: editDeptParentId || null,
+          programme_id: editDeptProgrammeId || null,
         }),
       });
       setDepartments((prev) => prev.map((d) => (d.id === res.department.id ? res.department : d)));
@@ -207,7 +222,8 @@ export const AcademicView: React.FC = () => {
 
   const openEditProgramme = (prog: Programme) => {
     setEditingProg(prog);
-    setEditProgDeptId(prog.department_id);
+    setEditProgLevel((prog.level as 'pg' | 'ug' | 'diploma' | 'certificate') || 'ug');
+    setEditProgDeptId(prog.department_id || '');
     setEditProgName(prog.name);
     setEditProgCode(prog.code);
     setEditProgYears(prog.duration_years);
@@ -222,7 +238,8 @@ export const AcademicView: React.FC = () => {
       await apiRequest(`/academic/programmes/${editingProg.id}`, {
         method: 'PUT',
         body: JSON.stringify({
-          department_id: editProgDeptId,
+          level: editProgLevel,
+          department_id: editProgDeptId || null,
           name: editProgName,
           code: editProgCode,
           duration_years: editProgYears,
@@ -378,30 +395,44 @@ export const AcademicView: React.FC = () => {
         {/* Departments Tab */}
         {activeTab === 'departments' && (
           <div>
-            {/* Department Hierarchy Filter Toolbar */}
+            {/* Level & Department Hierarchy Filter Toolbar */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '10px' }}>
-              <div className="view-toggle" style={{ margin: 0 }}>
-                <button
-                  type="button"
-                  className={`toggle-btn ${deptFilterType === 'all' ? 'active' : ''}`}
-                  onClick={() => setDeptFilterType('all')}
-                >
-                  All Departments ({departments.length})
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn ${deptFilterType === 'parent' ? 'active' : ''}`}
-                  onClick={() => setDeptFilterType('parent')}
-                >
-                  Parent Departments ({departments.filter(d => !d.parent_id).length})
-                </button>
-                <button
-                  type="button"
-                  className={`toggle-btn ${deptFilterType === 'sub' ? 'active' : ''}`}
-                  onClick={() => setDeptFilterType('sub')}
-                >
-                  Sub-Departments ({departments.filter(d => !!d.parent_id).length})
-                </button>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="view-toggle" style={{ margin: 0 }}>
+                  {(['all', 'pg', 'ug', 'diploma', 'certificate'] as const).map((lvl) => (
+                    <button
+                      key={lvl}
+                      type="button"
+                      className={`toggle-btn ${levelFilter === lvl ? 'active' : ''}`}
+                      onClick={() => setLevelFilter(lvl)}
+                    >
+                      {lvl === 'all' ? 'All Levels' : LEVEL_LABELS[lvl]}
+                    </button>
+                  ))}
+                </div>
+                <div className="view-toggle" style={{ margin: 0 }}>
+                  <button
+                    type="button"
+                    className={`toggle-btn ${deptFilterType === 'all' ? 'active' : ''}`}
+                    onClick={() => setDeptFilterType('all')}
+                  >
+                    All ({departments.length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn ${deptFilterType === 'parent' ? 'active' : ''}`}
+                    onClick={() => setDeptFilterType('parent')}
+                  >
+                    Top-Level ({departments.filter(d => !d.parent_id).length})
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn ${deptFilterType === 'sub' ? 'active' : ''}`}
+                    onClick={() => setDeptFilterType('sub')}
+                  >
+                    Sub-Departments ({departments.filter(d => !!d.parent_id).length})
+                  </button>
+                </div>
               </div>
 
               {canManage && (
@@ -410,10 +441,11 @@ export const AcademicView: React.FC = () => {
                   className="btn btn-secondary btn-sm"
                   onClick={() => {
                     setDeptParentId('');
+                    setDeptProgrammeId('');
                     setIsDeptModalOpen(true);
                   }}
                 >
-                  <Plus size={14} /> Create Parent / Sub Department
+                  <Plus size={14} /> New Department
                 </button>
               )}
             </div>
@@ -421,6 +453,7 @@ export const AcademicView: React.FC = () => {
             <div className="grid-cards">
               {departments
                 .filter(d => {
+                  if (levelFilter !== 'all' && (d.programme?.level || '') !== levelFilter) return false;
                   if (deptFilterType === 'parent') return !d.parent_id;
                   if (deptFilterType === 'sub') return !!d.parent_id;
                   return true;
@@ -430,10 +463,10 @@ export const AcademicView: React.FC = () => {
                     <div className="card-header">
                       <span className="card-tag">{dept.code}</span>
                       <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                        {dept.parent_id ? (
-                          <span className="badge badge-accent" style={{ fontSize: '11px' }}>Sub-Department</span>
-                        ) : (
-                          <span className="badge badge-role" style={{ fontSize: '11px' }}>Parent Department</span>
+                        {dept.programme?.level && (
+                          <span className="badge badge-accent" style={{ fontSize: '11px' }}>
+                            {LEVEL_LABELS[dept.programme.level] || dept.programme.level.toUpperCase()}
+                          </span>
                         )}
                         <span className={`status ${dept.status === 'active' ? 'ok' : 'pending'}`}>
                           {dept.status}
@@ -442,10 +475,18 @@ export const AcademicView: React.FC = () => {
                     </div>
                     <h3 style={{ margin: '8px 0 4px' }}>{dept.name}</h3>
 
+                    {dept.programme && (
+                      <div style={{ margin: '4px 0 8px' }}>
+                        <span style={{ fontSize: '12px', color: '#0f766e', background: '#f0fdf4', padding: '3px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+                          Parent Programme: <strong>{dept.programme.name} ({dept.programme.code})</strong>
+                        </span>
+                      </div>
+                    )}
+
                     {dept.parent && (
                       <div style={{ margin: '4px 0 8px' }}>
                         <span style={{ fontSize: '12px', color: '#0284c7', background: '#e0f2fe', padding: '3px 8px', borderRadius: '4px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                          ↳ Nested under Parent: <strong>{dept.parent.name}</strong>
+                          ↳ Nested under: <strong>{dept.parent.name}</strong>
                         </span>
                       </div>
                     )}
@@ -487,27 +528,48 @@ export const AcademicView: React.FC = () => {
 
         {/* Programmes Tab */}
         {activeTab === 'programmes' && (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Code</th>
-                  <th>Programme Name</th>
-                  <th>Department</th>
-                  <th>Duration</th>
-                  <th>Semesters</th>
-                  <th>Status</th>
-                  {canManage && <th>Actions</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {programmes.map((prog) => (
-                  <tr key={prog.id}>
-                    <td><code>{prog.code}</code></td>
-                    <td><strong>{prog.name}</strong></td>
-                    <td>{prog.department_name ?? '—'}</td>
-                    <td>{prog.duration_years} Years</td>
-                    <td>{prog.total_semesters} Semesters</td>
+          <div>
+            <div className="view-toggle" style={{ marginBottom: '14px' }}>
+              {(['all', 'pg', 'ug', 'diploma', 'certificate'] as const).map((lvl) => (
+                <button
+                  key={lvl}
+                  type="button"
+                  className={`toggle-btn ${levelFilter === lvl ? 'active' : ''}`}
+                  onClick={() => setLevelFilter(lvl)}
+                >
+                  {lvl === 'all' ? `All Levels (${programmes.length})` : `${LEVEL_LABELS[lvl]} (${programmes.filter((p) => (p.level || 'ug') === lvl).length})`}
+                </button>
+              ))}
+            </div>
+            <div className="table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Level</th>
+                    <th>Code</th>
+                    <th>Parent Programme Name</th>
+                    <th>Departments</th>
+                    <th>Duration</th>
+                    <th>Semesters</th>
+                    <th>Status</th>
+                    {canManage && <th>Actions</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {programmes
+                    .filter((p) => levelFilter === 'all' || (p.level || 'ug') === levelFilter)
+                    .map((prog) => (
+                    <tr key={prog.id}>
+                      <td>
+                        <span className="badge badge-accent">
+                          {LEVEL_LABELS[prog.level || 'ug'] || (prog.level || 'UG').toUpperCase()}
+                        </span>
+                      </td>
+                      <td><code>{prog.code}</code></td>
+                      <td><strong>{prog.name}</strong></td>
+                      <td>{prog.departments_count ?? 0}</td>
+                      <td>{prog.duration_years} Years</td>
+                      <td>{prog.total_semesters} Semesters</td>
                     <td>
                       <span className={`status ${prog.status === 'active' ? 'ok' : 'pending'}`}>
                         {prog.status}
@@ -540,6 +602,7 @@ export const AcademicView: React.FC = () => {
                 ))}
               </tbody>
             </table>
+          </div>
           </div>
         )}
 
@@ -657,6 +720,20 @@ export const AcademicView: React.FC = () => {
                   onChange={(e) => setDeptName(e.target.value)}
                 />
               </div>
+              <div className="form-group">
+                <label>Parent Programme (Level → Programme → Department)</label>
+                <select
+                  value={deptProgrammeId}
+                  onChange={(e) => setDeptProgrammeId(e.target.value)}
+                >
+                  <option value="">— Select Parent Programme —</option>
+                  {programmes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      [{LEVEL_LABELS[p.level || 'ug'] || (p.level || 'UG').toUpperCase()}] {p.name} ({p.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="form-group" style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '6px' }}>
                 <label style={{ fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Building2 size={16} /> Hierarchy: Parent Department Setting
@@ -704,8 +781,21 @@ export const AcademicView: React.FC = () => {
             </div>
             <form onSubmit={handleCreateProgramme} className="modal-form">
               <div className="form-group">
-                <label>Parent Department</label>
+                <label>Level</label>
+                <select
+                  value={progLevel}
+                  onChange={(e) => setProgLevel(e.target.value as 'pg' | 'ug' | 'diploma' | 'certificate')}
+                >
+                  <option value="pg">PG (Postgraduate)</option>
+                  <option value="ug">UG (Undergraduate)</option>
+                  <option value="diploma">Diploma</option>
+                  <option value="certificate">Certificate</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Parent Department (Optional)</label>
                 <select value={progDeptId} onChange={(e) => setProgDeptId(e.target.value)}>
+                  <option value="">— Top-Level Parent Programme (No Department) —</option>
                   {departments.map((d) => (
                     <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
                   ))}
@@ -784,6 +874,20 @@ export const AcademicView: React.FC = () => {
                   onChange={(e) => setEditDeptName(e.target.value)}
                 />
               </div>
+              <div className="form-group">
+                <label>Parent Programme (Level → Programme → Department)</label>
+                <select
+                  value={editDeptProgrammeId}
+                  onChange={(e) => setEditDeptProgrammeId(e.target.value)}
+                >
+                  <option value="">— Select Parent Programme —</option>
+                  {programmes.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      [{LEVEL_LABELS[p.level || 'ug'] || (p.level || 'UG').toUpperCase()}] {p.name} ({p.code})
+                    </option>
+                  ))}
+                </select>
+              </div>
               <div className="form-group" style={{ background: '#f0fdf4', padding: '12px', borderRadius: '8px', border: '1px solid #bbf7d0', marginTop: '6px' }}>
                 <label style={{ fontWeight: 600, color: '#166534', display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <Building2 size={16} /> Hierarchy: Parent Department Setting
@@ -840,8 +944,21 @@ export const AcademicView: React.FC = () => {
             </div>
             <form onSubmit={handleUpdateProgramme} className="modal-form">
               <div className="form-group">
-                <label>Parent Department</label>
+                <label>Level</label>
+                <select
+                  value={editProgLevel}
+                  onChange={(e) => setEditProgLevel(e.target.value as 'pg' | 'ug' | 'diploma' | 'certificate')}
+                >
+                  <option value="pg">PG (Postgraduate)</option>
+                  <option value="ug">UG (Undergraduate)</option>
+                  <option value="diploma">Diploma</option>
+                  <option value="certificate">Certificate</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label>Parent Department (Optional)</label>
                 <select value={editProgDeptId} onChange={(e) => setEditProgDeptId(e.target.value)}>
+                  <option value="">— Top-Level Parent Programme (No Department) —</option>
                   {departments.map((d) => (
                     <option key={d.id} value={d.id}>{d.name} ({d.code})</option>
                   ))}

@@ -16,8 +16,8 @@ class CertificateSeeder extends Seeder
 {
     public function run(): void
     {
-        $student = User::where('email', 'student@onilms.edu')->first();
-        $admin = User::where('email', 'admin@onilms.edu')->first();
+        $student = User::where('email', 'student@educare.edu')->first();
+        $admin = User::where('email', 'admin@educare.edu')->first();
         $course = Course::where('code', 'CS101')->first();
         $session = AcademicSession::where('is_current', true)->first();
 
@@ -70,7 +70,7 @@ class CertificateSeeder extends Seeder
                 'course_id' => $course->id,
             ],
             [
-                'certificate_code' => 'ONI-2026-CS101-HONORS',
+                'certificate_code' => 'EDU-2026-CS101-HONORS',
                 'academic_session_id' => $session?->id,
                 'issued_by_id' => $admin?->id,
                 'issued_at' => now()->subDays(1),
@@ -87,10 +87,10 @@ class CertificateSeeder extends Seeder
                     'credits' => $course->credits,
                     'department' => $course->department?->name ?? 'Department of Computer Science',
                     'programme' => 'B.Sc. (Hons) Computer Science',
-                    'institution_name' => 'ONI Institute of Technology and Higher Education',
+                    'institution_name' => 'Edu Care Institute and Higher Education',
                     'issuer_name' => 'Dr. Eleanor Vance, Controller of Examinations',
                     'signatory_role' => 'Academic Dean & University Registrar',
-                    'verification_url' => url('/api/v1/certificates/verify/ONI-2026-CS101-HONORS'),
+                    'verification_url' => url('/api/v1/certificates/verify/EDU-2026-CS101-HONORS'),
                 ],
                 'is_revoked' => false,
             ]

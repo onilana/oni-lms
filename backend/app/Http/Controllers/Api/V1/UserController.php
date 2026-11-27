@@ -89,21 +89,7 @@ class UserController
         if ($request->filled('level')) {
             $level = strtolower($request->query('level'));
             $query->whereHas('studentProfile.programme', function ($pq) use ($level) {
-                if ($level === 'ug') {
-                    $pq->where(function ($sub) {
-                        $sub->whereBetween('duration_years', [3, 5])
-                            ->orWhere('name', 'like', '%Bachelor%')
-                            ->orWhere('name', 'like', '%B.Ed%');
-                    });
-                } elseif ($level === 'pg') {
-                    $pq->where('duration_years', 2)
-                        ->where('name', 'not like', '%Bachelor%')
-                        ->where('name', 'not like', '%B.Ed%');
-                } elseif ($level === 'phd' || $level === 'doctoral') {
-                    $pq->where('name', 'like', '%Ph.D%')->orWhere('name', 'like', '%Doctoral%');
-                } elseif ($level === 'diploma') {
-                    $pq->where('duration_years', '<=', 2)->where('name', 'like', '%Diploma%');
-                }
+                $pq->where('level', $level);
             });
         }
 
@@ -250,9 +236,17 @@ class UserController
         ], 201);
     }
 
+    private function ensureCanModifyTargetUser(Request $request, User $target): void
+    {
+        if ($target->isSuperAdmin() && !$request->user()?->isSuperAdmin()) {
+            abort(403, 'Only a Super Administrator can modify or overwrite a Super Administrator account.');
+        }
+    }
+
     public function update(Request $request, User $user): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $this->ensureCanModifyTargetUser($request, $user);
 
         $validated = $request->validate([
             'name' => 'sometimes|required|string|max:255',
@@ -288,28 +282,71 @@ class UserController
                 }
             }
 
-            // Sync or update profile if relevant
-            if ($user->teacherProfile || array_key_exists('department_id', $validated)) {
-                $teacherProfile = $user->teacherProfile ?? new TeacherProfile(['user_id' => $user->id]);
-                if (array_key_exists('department_id', $validated)) $teacherProfile->department_id = $validated['department_id'];
-                if (array_key_exists('employee_id_number', $validated)) $teacherProfile->employee_id_number = $validated['employee_id_number'];
-                if (array_key_exists('designation', $validated)) $teacherProfile->designation = $validated['designation'];
-                if (array_key_exists('qualification', $validated)) $teacherProfile->qualification = $validated['qualification'];
-                if (isset($validated['status'])) $teacherProfile->status = $validated['status'];
-                $teacherProfile->save();
+            $effectiveRole = $validated['role'] ?? $user->roles()->value('name');
+            $isFacultyRole = in_array($effectiveRole, [Role::TEACHER, Role::HOD, Role::DEPT_ADMIN], true);
+            $isStudentRole = $effectiveRole === Role::STUDENT;
+
+            // Sync or update teacher profile only for faculty roles or existing teacher profiles
+            if ($user->teacherProfile || ($isFacultyRole && !empty($validated['department_id']))) {
+                $teacherProfile = $user->teacherProfile ?? new TeacherProfile([
+                    'user_id' => $user->id,
+                    'employee_id_number' => 'FAC-' . date('Y') . '-' . strtoupper(Str::random(5)),
+                ]);
+                if (!empty($validated['department_id'])) {
+                    $teacherProfile->department_id = $validated['department_id'];
+                } elseif (!$teacherProfile->department_id) {
+                    $teacherProfile->department_id = Department::value('id');
+                }
+                if (!empty($validated['employee_id_number'])) {
+                    $teacherProfile->employee_id_number = $validated['employee_id_number'];
+                } elseif (!$teacherProfile->employee_id_number) {
+                    $teacherProfile->employee_id_number = 'FAC-' . date('Y') . '-' . strtoupper(Str::random(5));
+                }
+                if (array_key_exists('designation', $validated) && $validated['designation'] !== null) {
+                    $teacherProfile->designation = $validated['designation'];
+                } elseif (!$teacherProfile->designation) {
+                    $teacherProfile->designation = $effectiveRole === Role::HOD ? 'Head of Department' : 'Faculty Member';
+                }
+                if (array_key_exists('qualification', $validated)) {
+                    $teacherProfile->qualification = $validated['qualification'];
+                }
+                if (isset($validated['status'])) {
+                    $teacherProfile->status = $validated['status'];
+                }
+                if ($teacherProfile->department_id) {
+                    $teacherProfile->save();
+                }
             }
 
-            if ($user->studentProfile || array_key_exists('programme_id', $validated) || array_key_exists('student_id_number', $validated)) {
+            // Sync or update student profile for student role or existing student profiles
+            if ($user->studentProfile || $isStudentRole || !empty($validated['programme_id']) || !empty($validated['student_id_number'])) {
                 $studentProfile = $user->studentProfile ?? new StudentProfile([
                     'user_id' => $user->id,
-                    'student_id_number' => $validated['student_id_number'] ?? ('STU-' . strtoupper(substr(str_replace('-', '', $user->id), 0, 8))),
+                    'student_id_number' => !empty($validated['student_id_number'])
+                        ? $validated['student_id_number']
+                        : ('STU-' . date('Y') . '-' . strtoupper(substr(str_replace('-', '', $user->id), 0, 8))),
                     'admission_date' => now()->toDateString(),
+                    'current_semester' => $validated['current_semester'] ?? 1,
                 ]);
-                if (array_key_exists('programme_id', $validated)) $studentProfile->programme_id = $validated['programme_id'];
-                if (array_key_exists('batch_id', $validated)) $studentProfile->batch_id = $validated['batch_id'];
-                if (array_key_exists('student_id_number', $validated)) $studentProfile->student_id_number = $validated['student_id_number'];
-                if (array_key_exists('current_semester', $validated)) $studentProfile->current_semester = $validated['current_semester'];
-                if (isset($validated['status'])) $studentProfile->status = $validated['status'];
+                if (array_key_exists('programme_id', $validated)) {
+                    $studentProfile->programme_id = $validated['programme_id'];
+                }
+                if (array_key_exists('batch_id', $validated)) {
+                    $studentProfile->batch_id = $validated['batch_id'];
+                }
+                if (!empty($validated['student_id_number'])) {
+                    $studentProfile->student_id_number = $validated['student_id_number'];
+                } elseif (!$studentProfile->student_id_number) {
+                    $studentProfile->student_id_number = 'STU-' . date('Y') . '-' . strtoupper(substr(str_replace('-', '', $user->id), 0, 8));
+                }
+                if (!empty($validated['current_semester'])) {
+                    $studentProfile->current_semester = $validated['current_semester'];
+                } elseif (!$studentProfile->current_semester) {
+                    $studentProfile->current_semester = 1;
+                }
+                if (isset($validated['status'])) {
+                    $studentProfile->status = $validated['status'];
+                }
                 $studentProfile->save();
             }
         });
@@ -333,6 +370,7 @@ class UserController
     public function resetPassword(Request $request, User $user): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $this->ensureCanModifyTargetUser($request, $user);
 
         $validated = $request->validate([
             'password' => 'required|string|min:8',
@@ -350,6 +388,7 @@ class UserController
     public function destroy(Request $request, User $user): JsonResponse
     {
         $this->authorizeAdmin($request);
+        $this->ensureCanModifyTargetUser($request, $user);
 
         if ($user->id === $request->user()->id) {
             return response()->json(['message' => 'You cannot delete your own account.'], 400);
@@ -365,6 +404,11 @@ class UserController
     public function bulkEnroll(Request $request): JsonResponse
     {
         $this->authorizeAdmin($request);
+
+        $overwrite = filter_var($request->input('overwrite', false), FILTER_VALIDATE_BOOLEAN);
+        if ($overwrite && !$request->user()->isSuperAdmin()) {
+            abort(403, 'Only a Super Administrator has overwrite authority during bulk enrollment.');
+        }
 
         $defaultRole = $request->input('default_role', Role::STUDENT);
         $usersData = [];
@@ -399,6 +443,7 @@ class UserController
         }
 
         $imported = 0;
+        $updated = 0;
         $errors = [];
         $breakdown = [
             Role::COLLEGE_ADMIN => 0,
@@ -430,31 +475,47 @@ class UserController
                 continue;
             }
 
-            if (User::where('email', $email)->exists()) {
+            $existingUser = User::where('email', $email)->first();
+            if ($existingUser && !$overwrite) {
                 $errors[] = "Row " . ($index + 1) . ": Email {$email} already exists.";
                 continue;
             }
 
             $password = $row['password'] ?? ($roleName === Role::STUDENT ? 'Student@2026!' : 'Staff@2026!');
-            $phone = $row['phone'] ?? null;
 
-            $user = User::create([
-                'name' => $name,
-                'email' => $email,
-                'password' => Hash::make($password),
-                'phone' => $phone,
-                'status' => 'active',
-                'email_verified_at' => now(),
-            ]);
+            if ($existingUser) {
+                $userUpdates = [
+                    'name' => $name,
+                    'status' => $row['status'] ?? $existingUser->status ?? 'active',
+                ];
+                if (!empty($row['password'])) {
+                    $userUpdates['password'] = Hash::make($row['password']);
+                }
+                $existingUser->update($userUpdates);
+                $user = $existingUser;
+                $updated++;
+            } else {
+                $user = User::create([
+                    'name' => $name,
+                    'email' => $email,
+                    'password' => Hash::make($password),
+                    'status' => $row['status'] ?? 'active',
+                    'email_verified_at' => now(),
+                ]);
+            }
 
             $roleModel = $rolesMap->get($roleName);
             if ($roleModel) {
-                $user->roles()->syncWithoutDetaching([$roleModel->id]);
+                if ($existingUser) {
+                    $user->roles()->sync([$roleModel->id]);
+                } else {
+                    $user->roles()->syncWithoutDetaching([$roleModel->id]);
+                }
             }
 
-            // Create appropriate profile
+            // Create or update appropriate profile
             if ($roleName === Role::STUDENT) {
-                $studentIdNum = $row['student_id_number'] ?? $row['student_id'] ?? ('STU-' . date('Y') . '-' . strtoupper(Str::random(5)));
+                $studentIdNum = $row['student_id_number'] ?? $row['student_id'] ?? $user->studentProfile?->student_id_number ?? ('STU-' . date('Y') . '-' . strtoupper(Str::random(5)));
                 $progId = $row['programme_id'] ?? null;
                 if (!$progId && !empty($row['programme'])) {
                     $progId = Programme::where('code', $row['programme'])->orWhere('name', 'like', "%{$row['programme']}%")->value('id');
@@ -469,15 +530,18 @@ class UserController
                     }
                 }
 
-                StudentProfile::create([
-                    'user_id' => $user->id,
-                    'student_id_number' => $studentIdNum,
-                    'programme_id' => $progId,
-                    'batch_id' => $row['batch_id'] ?? null,
-                    'admission_date' => $row['admission_date'] ?? now(),
-                    'current_semester' => $row['current_semester'] ?? 1,
-                    'status' => 'active',
-                ]);
+                StudentProfile::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'student_id_number' => $studentIdNum,
+                        'programme_id' => $progId ?? $user->studentProfile?->programme_id,
+                        'batch_id' => $row['batch_id'] ?? $user->studentProfile?->batch_id,
+                        'admission_date' => $row['admission_date'] ?? $user->studentProfile?->admission_date ?? now(),
+                        'current_semester' => $row['current_semester'] ?? $user->studentProfile?->current_semester ?? 1,
+                        'phone' => $row['phone'] ?? $user->studentProfile?->phone,
+                        'status' => $row['status'] ?? 'active',
+                    ]
+                );
             } elseif ($roleName === Role::TEACHER || $roleName === Role::HOD) {
                 $deptId = $row['department_id'] ?? null;
                 if (!$deptId && !empty($row['department'])) {
@@ -487,17 +551,19 @@ class UserController
                     $deptId = Programme::where('id', $row['programme_id'])->value('department_id');
                 }
                 if (!$deptId) {
-                    $deptId = Department::value('id');
+                    $deptId = $user->teacherProfile?->department_id ?? Department::value('id');
                 }
-                $empIdNum = $row['employee_id_number'] ?? $row['employee_id'] ?? ('FAC-' . date('Y') . '-' . strtoupper(Str::random(5)));
-                TeacherProfile::create([
-                    'user_id' => $user->id,
-                    'department_id' => $deptId,
-                    'employee_id_number' => $empIdNum,
-                    'designation' => $row['designation'] ?? ($roleName === Role::HOD ? 'Head of Department' : ($row['academic_designation'] ?? 'Professor')),
-                    'qualification' => $row['qualification'] ?? ($row['highest_qualification'] ?? 'Ph.D.'),
-                    'status' => 'active',
-                ]);
+                $empIdNum = $row['employee_id_number'] ?? $row['employee_id'] ?? $user->teacherProfile?->employee_id_number ?? ('FAC-' . date('Y') . '-' . strtoupper(Str::random(5)));
+                TeacherProfile::updateOrCreate(
+                    ['user_id' => $user->id],
+                    [
+                        'department_id' => $deptId,
+                        'employee_id_number' => $empIdNum,
+                        'designation' => $row['designation'] ?? $user->teacherProfile?->designation ?? ($roleName === Role::HOD ? 'Head of Department' : ($row['academic_designation'] ?? 'Professor')),
+                        'qualification' => $row['qualification'] ?? $user->teacherProfile?->qualification ?? ($row['highest_qualification'] ?? 'Ph.D.'),
+                        'status' => $row['status'] ?? 'active',
+                    ]
+                );
             }
 
             // Automatically grant access to all courses in the assigned Department/Programme
@@ -510,8 +576,9 @@ class UserController
         }
 
         return response()->json([
-            'message' => "Successfully enrolled {$imported} user(s) in bulk.",
+            'message' => "Successfully enrolled {$imported} user(s) in bulk" . ($updated > 0 ? " ({$updated} overwritten)" : '') . '.',
             'imported_count' => $imported,
+            'updated_count' => $updated,
             'breakdown' => $breakdown,
             'errors' => $errors,
         ]);

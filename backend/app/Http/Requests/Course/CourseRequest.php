@@ -44,6 +44,13 @@ class CourseRequest extends FormRequest
             'semester_number' => ['nullable', 'integer', 'min:1', 'max:16'],
             'status' => ['sometimes', 'string', 'in:draft,published,archived'],
             'syllabus' => ['nullable', 'string'],
+            'video_url' => ['nullable', 'string', 'max:500'],
+            'materials' => ['nullable', 'array'],
+            'materials.*.title' => ['required_with:materials', 'string', 'max:255'],
+            'materials.*.type' => ['required_with:materials', 'string', 'in:pdf,docx,excel,image,video,video_embed'],
+            'materials.*.url' => ['required_with:materials', 'string', 'max:1000'],
+            'materials.*.name' => ['nullable', 'string', 'max:255'],
+            'materials.*.extension' => ['nullable', 'string', 'max:20'],
         ];
     }
 }

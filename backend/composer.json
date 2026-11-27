@@ -1,7 +1,7 @@
 {
-  "name": "oni-lms/backend",
+  "name": "edu-care/backend",
   "type": "project",
-  "description": "ONI LMS Laravel API",
+  "description": "Edu Care Laravel API",
   "license": "proprietary",
   "require": {
     "php": "^8.4.1",

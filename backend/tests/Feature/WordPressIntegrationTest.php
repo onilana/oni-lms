@@ -26,8 +26,8 @@ class WordPressIntegrationTest extends TestCase
         parent::setUp();
         $this->seed(RoleAndPermissionSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
-        $this->student = User::where('email', 'student@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
+        $this->student = User::where('email', 'student@educare.edu')->first();
 
         $dept = Department::create([
             'code' => 'CS',
@@ -61,7 +61,7 @@ class WordPressIntegrationTest extends TestCase
         $response = $this->getJson('/api/v1/integrations/wordpress/catalogue');
 
         $response->assertStatus(200)
-            ->assertJsonPath('source', 'ONI Learning Management System')
+            ->assertJsonPath('source', 'Edu Care Learning Management System')
             ->assertJsonPath('count', 1)
             ->assertJsonPath('data.0.code', 'CS101')
             ->assertJsonPath('data.0.title', 'Introduction to Computing');
@@ -177,12 +177,12 @@ class WordPressIntegrationTest extends TestCase
         config(['wordpress.webhook_secret' => 'test-wp-sso-secret-key']);
 
         $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
-            'email' => 'admin@onilms.edu',
+            'email' => 'admin@educare.edu',
             'name' => 'Admin',
         ])->assertStatus(422);
 
         $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
-            'email' => 'admin@onilms.edu',
+            'email' => 'admin@educare.edu',
             'name' => 'Admin',
             'token' => 'wp-sso-forged-token',
         ])->assertStatus(401);

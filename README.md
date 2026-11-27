@@ -1,6 +1,6 @@
-# ONI LMS
+# Edu Care
 
-ONI Learning Management System — a full-stack academic LMS built with React + TypeScript + Vite (`frontend/`) and Laravel 12 (`backend/`), backed by PostgreSQL, Redis, and Nginx.
+Edu Care Learning Management System — a full-stack academic LMS built with React + TypeScript + Vite (`frontend/`) and Laravel 12 (`backend/`), backed by PostgreSQL, Redis, and Nginx.
 
 ## Architecture
 

@@ -38,7 +38,7 @@ class HealthController
 
         return response()->json([
             'success' => $healthy,
-            'service' => 'oni-lms-api',
+            'service' => 'edu-care-api',
             'checks' => $checks,
         ], $healthy ? 200 : 503);
     }

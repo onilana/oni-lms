@@ -32,14 +32,14 @@ class AiAssistantTest extends TestCase
         parent::setUp();
         $this->seed(RoleAndPermissionSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
 
         $this->teacher = User::factory()->create(['name' => 'Prof. Alan Turing']);
         $this->teacher->roles()->attach(Role::where('name', Role::TEACHER)->first()->id);
 
-        $this->enrolledStudent = User::where('email', 'student@onilms.edu')->first();
+        $this->enrolledStudent = User::where('email', 'student@educare.edu')->first();
 
-        $this->unenrolledStudent = User::factory()->create(['name' => 'Unenrolled Student', 'email' => 'unenrolled@onilms.edu']);
+        $this->unenrolledStudent = User::factory()->create(['name' => 'Unenrolled Student', 'email' => 'unenrolled@educare.edu']);
         $this->unenrolledStudent->roles()->attach(Role::where('name', Role::STUDENT)->first()->id);
 
         $department = Department::create([
@@ -228,7 +228,7 @@ class AiAssistantTest extends TestCase
             ->getJson('/api/v1/ai/usage');
 
         $response->assertStatus(200)
-            ->assertJsonPath('data.model_name', 'oni-rag-tutor-v1')
+            ->assertJsonPath('data.model_name', 'edu-care-tutor-v1')
             ->assertJsonPath('data.quota_limit', 500000);
     }
 }

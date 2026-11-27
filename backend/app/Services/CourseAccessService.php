@@ -44,11 +44,13 @@ class CourseAccessService
 
                     // All courses under this programme OR general department courses
                     $courses = Course::where(function ($q) use ($programme, $deptId) {
-                        $q->where('programme_id', $programme->id)
-                            ->orWhere(function ($sub) use ($deptId) {
+                        $q->where('programme_id', $programme->id);
+                        if ($deptId) {
+                            $q->orWhere(function ($sub) use ($deptId) {
                                 $sub->where('department_id', $deptId)
                                     ->whereNull('programme_id');
                             });
+                        }
                     })
                     ->where('status', '!=', 'archived')
                     ->get();
@@ -64,12 +66,14 @@ class CourseAccessService
                         ]);
                     }
 
-                    // Remove enrolment from other departments if student was transferred
-                    CourseEnrolment::where('user_id', $user->id)
-                        ->whereHas('course', function ($q) use ($deptId) {
-                            $q->where('department_id', '!=', $deptId);
-                        })
-                        ->delete();
+                    // Remove enrolment from other departments/programmes if student was transferred
+                    if ($deptId) {
+                        CourseEnrolment::where('user_id', $user->id)
+                            ->whereHas('course', function ($q) use ($deptId) {
+                                $q->where('department_id', '!=', $deptId);
+                            })
+                            ->delete();
+                    }
                 }
             }
         }

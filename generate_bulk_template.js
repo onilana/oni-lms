@@ -1,5 +1,5 @@
 /**
- * ONI LMS — Bulk Enrollment Excel Template Generator
+ * Edu Care — Bulk Enrollment Excel Template Generator
  * Run from: e:\oni-lms\frontend (so node_modules/xlsx is on the path)
  * Usage: node ../generate_bulk_template.js
  */
@@ -223,7 +223,7 @@ const mixedWidths = [
    ===================================================================== */
 
 const readmeData = [
-  ['ONI LMS — Bulk Enrollment Template', '', ''],
+  ['Edu Care — Bulk Enrollment Template', '', ''],
   ['', '', ''],
   ['VERSION', '1.0', ''],
   ['GENERATED', new Date().toISOString().slice(0, 10), ''],

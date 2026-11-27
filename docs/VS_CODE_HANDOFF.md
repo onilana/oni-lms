@@ -1,6 +1,6 @@
-# Continue ONI LMS in VS Code
+# Continue Edu Care in VS Code
 
-1. Download and extract `ONI-LMS-Starter-Project.zip`.
+1. Download and extract `EDU-CARE-Starter-Project.zip`.
 2. Open the extracted `oni-lms` folder in VS Code using **File → Open Folder**.
 3. Copy `PROJECT_CONTEXT.md` from this handover pack into the project root.
 4. Open `PROJECT_CONTEXT.md` and `README.md`.

@@ -14,8 +14,8 @@ class LiveClassroomSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::where('email', 'admin@onilms.edu')->first();
-        $student = User::where('email', 'student@onilms.edu')->first();
+        $admin = User::where('email', 'admin@educare.edu')->first();
+        $student = User::where('email', 'student@educare.edu')->first();
         $course = Course::where('code', 'CS101')->first();
         $session = AcademicSession::where('is_current', true)->first();
 
@@ -36,7 +36,7 @@ class LiveClassroomSeeder extends Seeder
                 'instructor_id' => $instructor->id,
                 'description' => 'Interactive session covering asymptotic runtime analysis, Big-O recurrence relations, and dynamic programming walkthrough with Q&A.',
                 'provider' => LiveSession::PROVIDER_JITSI,
-                'meeting_url' => 'https://meet.jit.si/ONI-LMS-CS101-Live-Workshop-2026',
+                'meeting_url' => 'https://meet.jit.si/EDU-CARE-CS101-Live-Workshop-2026',
                 'meeting_id' => 'CS101-LIVE-901',
                 'passcode' => 'OniLive2026!',
                 'scheduled_start_at' => now()->subMinutes(10),

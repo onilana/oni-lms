@@ -13,6 +13,13 @@ class DepartmentResource extends JsonResource
         return [
             'id' => $this->id,
             'parent_id' => $this->parent_id,
+            'programme_id' => $this->programme_id,
+            'programme' => $this->relationLoaded('programme') && $this->programme ? [
+                'id' => $this->programme->id,
+                'name' => $this->programme->name,
+                'code' => $this->programme->code,
+                'level' => $this->programme->level ?? 'ug',
+            ] : null,
             'parent' => $this->relationLoaded('parent') && $this->parent ? [
                 'id' => $this->parent->id,
                 'name' => $this->parent->name,

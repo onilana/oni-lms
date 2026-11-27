@@ -19,6 +19,7 @@ class Department extends Model
 
     protected $fillable = [
         'parent_id',
+        'programme_id',
         'name',
         'code',
         'description',
@@ -29,6 +30,11 @@ class Department extends Model
     public function parent(): BelongsTo
     {
         return $this->belongsTo(Department::class, 'parent_id');
+    }
+
+    public function programme(): BelongsTo
+    {
+        return $this->belongsTo(Programme::class, 'programme_id');
     }
 
     public function subDepartments(): HasMany

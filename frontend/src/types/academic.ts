@@ -5,6 +5,13 @@ export interface Department {
   description?: string;
   status: string;
   parent_id?: string | null;
+  programme_id?: string | null;
+  programme?: {
+    id: string;
+    name: string;
+    code: string;
+    level?: string;
+  } | null;
   parent?: {
     id: string;
     name: string;
@@ -27,13 +34,15 @@ export interface Department {
 
 export interface Programme {
   id: string;
-  department_id: string;
-  department_name?: string;
+  level?: 'pg' | 'ug' | 'diploma' | 'certificate' | string;
+  department_id?: string | null;
+  department_name?: string | null;
   name: string;
   code: string;
   duration_years: number;
   total_semesters: number;
   status: string;
+  departments_count?: number;
   batches_count?: number;
   students_count?: number;
 }

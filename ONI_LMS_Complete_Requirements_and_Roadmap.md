@@ -1,7 +1,7 @@
-# ONI LMS --- Complete Requirements & Development Roadmap
+# Edu Care --- Complete Requirements & Development Roadmap
 
 **Document type:** Product requirements and implementation roadmap\
-**Project:** ONI Learning Management System (ONI LMS)\
+**Project:** Edu Care Learning Management System (Edu Care)\
 **Status:** Requirements baseline --- implementation must be verified
 against source code and tests\
 **Version:** 1.0\
@@ -11,7 +11,7 @@ against source code and tests\
 
 ## 1. Project Overview
 
-ONI LMS is an independent Learning Management System intended to support
+Edu Care is an independent Learning Management System intended to support
 college academic administration, teaching, learning, assessment,
 attendance, communication, reporting, and related workflows.
 
@@ -40,7 +40,7 @@ verification.
 
 ### 1.2 Scope principles
 
--   ONI LMS is independent of the existing `oni_lana` WordPress website.
+-   Edu Care is independent of the existing `oni_lana` WordPress website.
 -   The LMS and WordPress must use separate databases.
 -   WordPress integration and SSO are later-phase work.
 -   Do not store large video files on the Laravel application server.
@@ -270,7 +270,7 @@ modifying it.
 
 ## 4.4 Core Portal Requirements — Student, Teacher, and Administration
 
-ONI LMS must provide three role-based portal experiences. They may share one React application and one Laravel API, but each portal must have its own role-aware dashboard, navigation, permitted actions, and data access rules.
+Edu Care must provide three role-based portal experiences. They may share one React application and one Laravel API, but each portal must have its own role-aware dashboard, navigation, permitted actions, and data access rules.
 
 After login, users must be directed to the appropriate portal using roles and permissions verified by the backend. Hiding a menu item in React is not a security control: Laravel must authorize every protected operation.
 
@@ -1299,7 +1299,7 @@ of a completed feature.
 
 # 10. Development Reporting Requirements
 
-Every weekly ONI LMS report should include:
+Every weekly Edu Care report should include:
 
 -   Current milestone and status.
 -   Work completed, supported by repository evidence.
@@ -1334,4 +1334,4 @@ Reporting rules:
 
 ------------------------------------------------------------------------
 
-**End of ONI LMS requirements and development roadmap.**
+**End of Edu Care requirements and development roadmap.**

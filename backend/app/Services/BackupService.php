@@ -33,11 +33,11 @@ class BackupService
         $timestamp = date('Y-m-d_His');
 
         if ($dbDefault === 'pgsql') {
-            $filename = "oni_lms_backup_pgsql_{$timestamp}.dump";
+            $filename = "edu_care_backup_pgsql_{$timestamp}.dump";
             $targetPath = $this->backupDir . DIRECTORY_SEPARATOR . $filename;
             $this->dumpPostgres($targetPath);
         } elseif ($dbDefault === 'sqlite') {
-            $filename = "oni_lms_backup_sqlite_{$timestamp}.sqlite";
+            $filename = "edu_care_backup_sqlite_{$timestamp}.sqlite";
             $targetPath = $this->backupDir . DIRECTORY_SEPARATOR . $filename;
             $this->dumpSqlite($targetPath);
         } else {

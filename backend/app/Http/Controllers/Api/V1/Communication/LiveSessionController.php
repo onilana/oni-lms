@@ -78,7 +78,7 @@ class LiveSessionController
 
         if (empty($meetingUrl) && $provider === LiveSession::PROVIDER_JITSI) {
             $slug = Str::slug($course->code ?: 'class');
-            $meetingUrl = 'https://meet.jit.si/ONI-LMS-' . $slug . '-' . Str::random(10);
+            $meetingUrl = 'https://meet.jit.si/EDU-CARE-' . $slug . '-' . Str::random(10);
         }
 
         // Optional attendance session linkage
@@ -110,7 +110,7 @@ class LiveSessionController
             'title' => $validated['title'],
             'description' => $validated['description'] ?? null,
             'provider' => $provider,
-            'meeting_url' => $meetingUrl ?: 'https://meet.jit.si/ONI-LMS-Room-' . Str::random(8),
+            'meeting_url' => $meetingUrl ?: 'https://meet.jit.si/EDU-CARE-Room-' . Str::random(8),
             'meeting_id' => $validated['meeting_id'] ?? null,
             'passcode' => $validated['passcode'] ?? null,
             'scheduled_start_at' => $validated['scheduled_start_at'],

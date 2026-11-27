@@ -127,7 +127,7 @@ export const StudentDashboardView: React.FC<StudentDashboardViewProps> = ({
       <div className="student-dashboard-guest">
         <div className="guest-hero-card">
           <GraduationCap size={64} className="guest-hero-icon" />
-          <h2>Welcome to ONI College Learning Space</h2>
+          <h2>Welcome to Edu Care Learning Space</h2>
           <p>
             Sign in with your student or faculty credentials to access your course curricula,
             assignments, timed examinations, and grades.

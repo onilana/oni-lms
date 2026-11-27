@@ -38,7 +38,7 @@ class CertificateController
             'issued_at' => $certificate->issued_at?->toDateString(),
             'grade' => $certificate->grade,
             'final_score' => $certificate->final_score !== null ? (float) $certificate->final_score : null,
-            'institution_name' => $certificate->metadata['institution_name'] ?? 'ONI Institute of Technology and Higher Education',
+            'institution_name' => $certificate->metadata['institution_name'] ?? 'Edu Care Institute and Higher Education',
             'is_revoked' => (bool) $certificate->is_revoked,
             'revoked_at' => $certificate->revoked_at?->toDateString(),
             'revocation_reason' => $certificate->is_revoked ? $certificate->revocation_reason : null,

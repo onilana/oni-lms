@@ -9,12 +9,15 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Trash2,
+  Upload,
   UserCheck,
   Users,
+  Video,
   X
 } from 'lucide-react';
 import { apiRequest, ApiError } from '../api/client';
-import type { Course } from '../types/course';
+import type { Course, CourseMaterial } from '../types/course';
 import type { Department, Programme, AcademicSession } from '../types/academic';
 import { useAuth } from '../context/AuthContext';
 
@@ -53,6 +56,9 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
   const [newStatus, setNewStatus] = useState<'draft' | 'published'>('published');
   const [newDesc, setNewDesc] = useState('');
   const [newSyllabus, setNewSyllabus] = useState('');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [newMaterials, setNewMaterials] = useState<CourseMaterial[]>([]);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
 
   // Edit Course modal
   const [editingCourse, setEditingCourse] = useState<Course | null>(null);
@@ -66,6 +72,78 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
   const [editStatus, setEditStatus] = useState<'draft' | 'published' | 'archived'>('published');
   const [editDesc, setEditDesc] = useState('');
   const [editSyllabus, setEditSyllabus] = useState('');
+  const [editVideoUrl, setEditVideoUrl] = useState('');
+  const [editMaterials, setEditMaterials] = useState<CourseMaterial[]>([]);
+
+  const detectMaterialType = (ext: string): CourseMaterial['type'] => {
+    const e = ext.toLowerCase();
+    if (e === 'pdf') return 'pdf';
+    if (e === 'doc' || e === 'docx') return 'docx';
+    if (e === 'xls' || e === 'xlsx' || e === 'csv') return 'excel';
+    if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(e)) return 'image';
+    if (['mp4', 'webm', 'mov', 'ogg'].includes(e)) return 'video';
+    return 'pdf';
+  };
+
+  const getVideoEmbedInfo = (rawUrl: string): { kind: 'iframe' | 'video'; src: string } | null => {
+    const url = rawUrl.trim();
+    if (!url) return null;
+    // YouTube
+    const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{6,})/);
+    if (ytMatch) {
+      return { kind: 'iframe', src: `https://www.youtube.com/embed/${ytMatch[1]}` };
+    }
+    // Vimeo
+    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) {
+      return { kind: 'iframe', src: `https://player.vimeo.com/video/${vimeoMatch[1]}` };
+    }
+    // Loom
+    const loomMatch = url.match(/loom\.com\/share\/([A-Za-z0-9]+)/);
+    if (loomMatch) {
+      return { kind: 'iframe', src: `https://www.loom.com/embed/${loomMatch[1]}` };
+    }
+    // Direct video file or uploaded video
+    return { kind: 'video', src: url };
+  };
+
+  const handleUploadCourseFiles = async (files: FileList | null, mode: 'create' | 'edit') => {
+    if (!files || files.length === 0) return;
+    setUploadingMedia(true);
+    try {
+      const uploaded: CourseMaterial[] = [];
+      for (const file of Array.from(files)) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const res = await apiRequest<{
+          attachment_path: string;
+          attachment_url: string;
+          attachment_name: string;
+          extension: string;
+        }>('/lessons/upload-attachment', {
+          method: 'POST',
+          body: formData,
+        });
+        const ext = res.extension || file.name.split('.').pop() || '';
+        uploaded.push({
+          title: res.attachment_name || file.name,
+          type: detectMaterialType(ext),
+          url: res.attachment_path,
+          name: res.attachment_name || file.name,
+          extension: ext,
+        });
+      }
+      if (mode === 'create') {
+        setNewMaterials((prev) => [...prev, ...uploaded]);
+      } else {
+        setEditMaterials((prev) => [...prev, ...uploaded]);
+      }
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Failed to upload course attachment');
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
 
   const fetchCourses = async () => {
     setLoading(true);
@@ -151,6 +229,8 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
           status: newStatus,
           description: newDesc,
           syllabus: newSyllabus,
+          video_url: newVideoUrl.trim() || null,
+          materials: newMaterials,
         }),
       });
 
@@ -159,6 +239,8 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
       setNewTitle('');
       setNewDesc('');
       setNewSyllabus('');
+      setNewVideoUrl('');
+      setNewMaterials([]);
       await fetchCourses();
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Error creating course');
@@ -177,6 +259,8 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
     setEditStatus(c.status);
     setEditDesc(c.description || '');
     setEditSyllabus(c.syllabus || '');
+    setEditVideoUrl(c.video_url || '');
+    setEditMaterials(c.materials || []);
   };
 
   const handleUpdateCourse = async (e: React.FormEvent) => {
@@ -196,6 +280,8 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
           status: editStatus,
           description: editDesc,
           syllabus: editSyllabus,
+          video_url: editVideoUrl.trim() || null,
+          materials: editMaterials,
         }),
       });
 
@@ -406,6 +492,49 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
                 <h4>Curriculum & Syllabus</h4>
                 <pre className="syllabus-box">{selectedCourse.syllabus || 'Syllabus topics to be uploaded by instructor.'}</pre>
               </div>
+
+              {selectedCourse.video_url && (() => {
+                const embed = getVideoEmbedInfo(selectedCourse.video_url);
+                if (!embed) return null;
+                return (
+                  <div className="modal-section">
+                    <h4>Course Video</h4>
+                    {embed.kind === 'iframe' ? (
+                      <div style={{ position: 'relative', paddingBottom: '56.25%', height: 0, overflow: 'hidden', borderRadius: '8px', background: '#0f172a' }}>
+                        <iframe
+                          src={embed.src}
+                          title={selectedCourse.title}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen
+                          style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', border: 0 }}
+                        />
+                      </div>
+                    ) : (
+                      <video controls src={embed.src} style={{ width: '100%', maxHeight: '360px', borderRadius: '8px', background: '#0f172a' }} />
+                    )}
+                  </div>
+                );
+              })()}
+
+              {selectedCourse.materials && selectedCourse.materials.length > 0 && (
+                <div className="modal-section">
+                  <h4>Course Materials &amp; Attachments ({selectedCourse.materials.length})</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
+                    {selectedCourse.materials.map((mat, idx) => (
+                      <div key={idx} style={{ border: '1px solid #e2e8f0', borderRadius: '8px', padding: '10px', background: '#f8fafc' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                          <span className="badge badge-accent" style={{ fontSize: '10px', textTransform: 'uppercase' }}>{mat.type}</span>
+                          <a href={mat.url} target="_blank" rel="noreferrer" style={{ fontSize: '12px', fontWeight: 600 }}>Open / Download</a>
+                        </div>
+                        {mat.type === 'image' && (
+                          <img src={mat.url} alt={mat.title} style={{ width: '100%', height: '110px', objectFit: 'cover', borderRadius: '6px', marginBottom: '6px' }} />
+                        )}
+                        <div style={{ fontSize: '13px', fontWeight: 600, wordBreak: 'break-word' }}>{mat.title}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="modal-footer">
@@ -508,6 +637,7 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
                     <option value="Undergraduate">Undergraduate</option>
                     <option value="Postgraduate">Postgraduate</option>
                     <option value="Diploma">Diploma</option>
+                    <option value="Certificate">Certificate</option>
                   </select>
                 </div>
                 <div className="form-group">
@@ -549,7 +679,74 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block">
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
+                <h4 style={{ fontSize: '14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Video size={15} /> Course Media, Documents &amp; Video Link Embedder
+                </h4>
+                <div className="form-group">
+                  <label>Video Link Embedder (YouTube, Vimeo, Loom, or direct MP4 URL)</label>
+                  <input
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..."
+                    value={newVideoUrl}
+                    onChange={(e) => setNewVideoUrl(e.target.value)}
+                  />
+                  {newVideoUrl && (() => {
+                    const embed = getVideoEmbedInfo(newVideoUrl);
+                    if (!embed) return null;
+                    return (
+                      <div style={{ marginTop: '8px', borderRadius: '8px', overflow: 'hidden', border: '1px solid #cbd5e1' }}>
+                        {embed.kind === 'iframe' ? (
+                          <iframe
+                            src={embed.src}
+                            title="Video preview"
+                            style={{ width: '100%', height: '200px', border: 0 }}
+                            allowFullScreen
+                          />
+                        ) : (
+                          <video controls src={embed.src} style={{ width: '100%', maxHeight: '200px', background: '#000' }} />
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Upload size={14} /> Upload PDF, DOCX, Excel, Images, or Video Files
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov"
+                    disabled={uploadingMedia}
+                    onChange={(e) => handleUploadCourseFiles(e.target.files, 'create')}
+                  />
+                  {uploadingMedia && <small style={{ color: '#0284c7' }}>Uploading file(s)...</small>}
+                  {newMaterials.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                      {newMaterials.map((mat, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px' }}>
+                          <span style={{ fontSize: '13px' }}>
+                            <strong style={{ textTransform: 'uppercase', marginRight: '8px', color: '#0f766e' }}>[{mat.type}]</strong>
+                            {mat.title}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm"
+                            style={{ color: '#ef4444' }}
+                            onClick={() => setNewMaterials((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block" disabled={uploadingMedia}>
                 Save & Publish Course
               </button>
             </form>
@@ -671,7 +868,54 @@ export const CoursesView: React.FC<CoursesViewProps> = ({ onOpenLogin, onOpenLea
                 />
               </div>
 
-              <button type="submit" className="btn btn-primary btn-block">
+              <div style={{ borderTop: '1px solid #e2e8f0', paddingTop: '12px', marginTop: '6px' }}>
+                <h4 style={{ fontSize: '14px', marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Video size={15} /> Course Media, Documents &amp; Video Link Embedder
+                </h4>
+                <div className="form-group">
+                  <label>Video Link Embedder (YouTube, Vimeo, Loom, or direct MP4 URL)</label>
+                  <input
+                    type="url"
+                    placeholder="https://www.youtube.com/watch?v=... or https://vimeo.com/..."
+                    value={editVideoUrl}
+                    onChange={(e) => setEditVideoUrl(e.target.value)}
+                  />
+                </div>
+                <div className="form-group">
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Upload size={14} /> Upload PDF, DOCX, Excel, Images, or Video Files
+                  </label>
+                  <input
+                    type="file"
+                    multiple
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.csv,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.mov"
+                    disabled={uploadingMedia}
+                    onChange={(e) => handleUploadCourseFiles(e.target.files, 'edit')}
+                  />
+                  {editMaterials.length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '8px' }}>
+                      {editMaterials.map((mat, idx) => (
+                        <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', padding: '6px 10px' }}>
+                          <span style={{ fontSize: '13px' }}>
+                            <strong style={{ textTransform: 'uppercase', marginRight: '8px', color: '#0f766e' }}>[{mat.type}]</strong>
+                            {mat.title}
+                          </span>
+                          <button
+                            type="button"
+                            className="btn btn-link btn-sm"
+                            style={{ color: '#ef4444' }}
+                            onClick={() => setEditMaterials((prev) => prev.filter((_, i) => i !== idx))}
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <button type="submit" className="btn btn-primary btn-block" disabled={uploadingMedia}>
                 Save Changes
               </button>
             </form>

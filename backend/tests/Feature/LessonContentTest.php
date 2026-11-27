@@ -45,14 +45,14 @@ class LessonContentTest extends TestCase
         $session = AcademicSession::where('is_current', true)->first();
 
         // 1. Admin
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
         $this->adminToken = $this->admin->createToken('admin-token')->plainTextToken;
 
         // 2. Teacher
         $teacherRole = Role::where('name', Role::TEACHER)->first();
         $this->teacher = User::create([
             'name' => 'Prof. Turing',
-            'email' => 'turing@faculty.onilms.edu',
+            'email' => 'turing@faculty.educare.edu',
             'password' => Hash::make('Teacher123!'),
             'status' => 'active',
         ]);
@@ -68,7 +68,7 @@ class LessonContentTest extends TestCase
         $studentRole = Role::where('name', Role::STUDENT)->first();
         $this->enrolledStudent = User::create([
             'name' => 'Ada Lovelace',
-            'email' => 'ada@student.onilms.edu',
+            'email' => 'ada@student.educare.edu',
             'password' => Hash::make('Student123!'),
             'status' => 'active',
         ]);
@@ -85,7 +85,7 @@ class LessonContentTest extends TestCase
         // 4. Non-enrolled Student
         $this->nonEnrolledStudent = User::create([
             'name' => 'Charles Babbage',
-            'email' => 'charles@student.onilms.edu',
+            'email' => 'charles@student.educare.edu',
             'password' => Hash::make('Student123!'),
             'status' => 'active',
         ]);

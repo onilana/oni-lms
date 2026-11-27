@@ -1,0 +1,27 @@
+<?php
+
+namespace App\Providers;
+
+use App\Models\User;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\ServiceProvider;
+
+class AppServiceProvider extends ServiceProvider
+{
+    public function register(): void
+    {
+        //
+    }
+
+    public function boot(): void
+    {
+        // Grant Super Administrator universal override authority across all Gates and Policies.
+        Gate::before(function (User $user, string $ability): ?bool {
+            if ($user->isSuperAdmin()) {
+                return true;
+            }
+
+            return null;
+        });
+    }
+}

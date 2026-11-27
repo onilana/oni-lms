@@ -21,7 +21,7 @@ class HealthTest extends TestCase
                 'redis',
             ],
         ]);
-        $this->assertSame('oni-lms-api', $response->json('service'));
+        $this->assertSame('edu-care-api', $response->json('service'));
         $this->assertSame('ok', $response->json('checks.application'));
     }
 }

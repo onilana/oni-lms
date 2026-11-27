@@ -60,7 +60,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
   }, [initialCourses]);
 
   // Verification state
-  const [verifyCode, setVerifyCode] = useState<string>('ONI-2026-CS101-HONORS');
+  const [verifyCode, setVerifyCode] = useState<string>('EDU-2026-CS101-HONORS');
   const [verifyResult, setVerifyResult] = useState<CertificateVerificationResult | null>(null);
   const [verifying, setVerifying] = useState<boolean>(false);
 
@@ -250,7 +250,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
         </div>
         <div className="header-actions">
           <button
-            onClick={() => handleVerify('ONI-2026-CS101-HONORS')}
+            onClick={() => handleVerify('EDU-2026-CS101-HONORS')}
             className="btn btn-secondary"
             title="Check public sample verification"
           >
@@ -605,7 +605,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
           <div className="card verify-search-card">
             <h3 style={{ marginBottom: '0.5rem' }}>Public Credential Verification Portal</h3>
             <p className="text-muted" style={{ marginBottom: '1.25rem' }}>
-              Universities, employers, and accreditation bodies can verify credentials against the ONI academic register.
+              Universities, employers, and accreditation bodies can verify credentials against the Edu Care academic register.
             </p>
 
             <form
@@ -619,7 +619,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
                 <Search size={20} className="search-icon" />
                 <input
                   type="text"
-                  placeholder="Enter Certificate Verification Code (e.g. ONI-2026-CS101-HONORS)"
+                  placeholder="Enter Certificate Verification Code (e.g. EDU-2026-CS101-HONORS)"
                   value={verifyCode}
                   onChange={(e) => setVerifyCode(e.target.value)}
                   className="form-control"
@@ -641,7 +641,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
                     <div>
                       <span className="badge badge-success">AUTHENTIC &amp; ACCREDITED</span>
                       <h2>Certificate Officially Validated</h2>
-                      <p>This academic credential was officially conferred by ONI Institute of Technology.</p>
+                      <p>This academic credential was officially conferred by Edu Care Institute.</p>
                     </div>
                   </div>
                 ) : (
@@ -1003,7 +1003,7 @@ export const CertificatesView: React.FC<CertificatesViewProps> = ({ currentUser,
                       <Award size={56} color="#92400e" />
                     </div>
                     <h4 className="institution-name">
-                      {selectedCertificate.metadata?.institution_name || 'ONI INSTITUTE OF TECHNOLOGY'}
+                      {selectedCertificate.metadata?.institution_name || 'EDU CARE INSTITUTE'}
                     </h4>
                     <p className="institution-sub">BOARD OF GOVERNORS &amp; ACADEMIC SENATE</p>
                   </div>

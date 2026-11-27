@@ -34,10 +34,10 @@ class AttendanceTest extends TestCase
         $teacherRole = Role::where('name', Role::TEACHER)->first();
         $studentRole = Role::where('name', Role::STUDENT)->first();
 
-        $this->teacher = User::factory()->create(['email' => 'teacher_att@onilms.edu']);
+        $this->teacher = User::factory()->create(['email' => 'teacher_att@educare.edu']);
         $this->teacher->roles()->attach($teacherRole->id);
 
-        $this->student = User::factory()->create(['email' => 'student_att@onilms.edu']);
+        $this->student = User::factory()->create(['email' => 'student_att@educare.edu']);
         $this->student->roles()->attach($studentRole->id);
 
         $this->course = Course::where('code', 'CS101')->firstOrFail();

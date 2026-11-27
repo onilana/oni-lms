@@ -22,8 +22,8 @@ class AuditAndBackupTest extends TestCase
         parent::setUp();
         $this->seed(RoleAndPermissionSeeder::class);
 
-        $this->admin = User::where('email', 'admin@onilms.edu')->first();
-        $this->student = User::where('email', 'student@onilms.edu')->first();
+        $this->admin = User::where('email', 'admin@educare.edu')->first();
+        $this->student = User::where('email', 'student@educare.edu')->first();
 
         AuditService::log('user.login', $this->student, 'User', $this->student->id);
         AuditService::log('exam.published', $this->admin, 'Exam', 'sample-exam-id');

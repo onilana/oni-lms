@@ -32,6 +32,8 @@ class CourseResource extends JsonResource
             'semester_number' => $this->semester_number,
             'status' => $this->status,
             'syllabus' => $this->syllabus,
+            'video_url' => $this->video_url,
+            'materials' => $this->materials ?? [],
             'creator' => new UserResource($this->whenLoaded('creator')),
             'instructors' => CourseInstructorResource::collection($this->whenLoaded('instructors')),
             'enrolments_count' => $this->whenCounted('enrolments'),

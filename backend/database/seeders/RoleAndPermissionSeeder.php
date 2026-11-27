@@ -174,7 +174,7 @@ class RoleAndPermissionSeeder extends Seeder
         }
 
         $superAdmin = User::firstOrCreate(
-            ['email' => env('INITIAL_ADMIN_EMAIL', 'admin@onilms.edu')],
+            ['email' => env('INITIAL_ADMIN_EMAIL', 'admin@educare.edu')],
             [
                 'name' => 'Super Administrator',
                 'password' => Hash::make($adminPassword),
@@ -195,7 +195,7 @@ class RoleAndPermissionSeeder extends Seeder
 
         $demoStudentPassword = env('INITIAL_STUDENT_PASSWORD') ?: Str::random(24);
         $demoStudent = User::firstOrCreate(
-            ['email' => 'student@onilms.edu'],
+            ['email' => 'student@educare.edu'],
             [
                 'name' => 'Aarav Sharma',
                 'password' => Hash::make($demoStudentPassword),
@@ -210,7 +210,7 @@ class RoleAndPermissionSeeder extends Seeder
 
         $demoTeacherPassword = env('INITIAL_TEACHER_PASSWORD') ?: Str::random(24);
         $demoTeacher = User::firstOrCreate(
-            ['email' => 'teacher@onilms.edu'],
+            ['email' => 'teacher@educare.edu'],
             [
                 'name' => 'Dr. Priya Ramanathan',
                 'password' => Hash::make($demoTeacherPassword),
@@ -225,7 +225,7 @@ class RoleAndPermissionSeeder extends Seeder
 
         $demoHodPassword = env('INITIAL_HOD_PASSWORD') ?: Str::random(24);
         $demoHod = User::firstOrCreate(
-            ['email' => 'hod@onilms.edu'],
+            ['email' => 'hod@educare.edu'],
             [
                 'name' => 'Prof. Vikram Sengupta',
                 'password' => Hash::make($demoHodPassword),

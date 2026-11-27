@@ -29,6 +29,8 @@ class Course extends Model
         'semester_number',
         'status',
         'syllabus',
+        'video_url',
+        'materials',
         'created_by_id',
     ];
 
@@ -37,6 +39,7 @@ class Course extends Model
         return [
             'credits' => 'integer',
             'semester_number' => 'integer',
+            'materials' => 'array',
         ];
     }
 
@@ -192,18 +195,18 @@ class Course extends Model
 
     public function isTaughtBy(User $user): bool
     {
-        $cacheKey = 'oni-lms.course-teacher.'.implode('.', [$this->getKey(), $user->getKey()]);
+        $cacheKey = 'edu-care.course-teacher.'.implode('.', [$this->getKey(), $user->getKey()]);
 
         if (app()->bound('request')) {
             $request = request();
-            $cache = $request->attributes->get('_oni_lms_course_teacher_cache', []);
+            $cache = $request->attributes->get('_edu_care_course_teacher_cache', []);
             if (array_key_exists($cacheKey, $cache)) {
                 return $cache[$cacheKey];
             }
 
             $result = $this->teacherUsers()->where('users.id', $user->id)->exists();
             $cache[$cacheKey] = $result;
-            $request->attributes->set('_oni_lms_course_teacher_cache', $cache);
+            $request->attributes->set('_edu_care_course_teacher_cache', $cache);
             return $result;
         }
 

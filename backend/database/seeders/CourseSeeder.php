@@ -18,7 +18,7 @@ class CourseSeeder extends Seeder
 {
     public function run(): void
     {
-        $admin = User::where('email', 'admin@onilms.edu')->first();
+        $admin = User::where('email', 'admin@educare.edu')->first();
         $cse = Department::where('code', 'CSE')->first();
         $btechCse = Programme::where('code', 'BTECH-CSE')->first();
         $session = AcademicSession::where('is_current', true)->first();
@@ -60,8 +60,8 @@ class CourseSeeder extends Seeder
         );
 
         // Assign instructor
-        $teacher = User::where('email', 'teacher@onilms.edu')->first();
-        $hod = User::where('email', 'hod@onilms.edu')->first();
+        $teacher = User::where('email', 'teacher@educare.edu')->first();
+        $hod = User::where('email', 'hod@educare.edu')->first();
 
         if ($teacher) {
             \App\Models\TeacherProfile::firstOrCreate(
@@ -124,7 +124,7 @@ class CourseSeeder extends Seeder
         }
 
         // Demo Student Profile & Enrolments
-        $student = User::where('email', 'student@onilms.edu')->first();
+        $student = User::where('email', 'student@educare.edu')->first();
         $batch = Batch::where('code', 'CSE-2026')->first();
         $sem1 = Semester::where('academic_session_id', $session->id)->where('semester_number', 1)->first();
 

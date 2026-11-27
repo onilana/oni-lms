@@ -298,7 +298,7 @@ add_filter('wp_nav_menu_items', 'oni_lana_add_lms_link', 10, 2);
 PHP,
 
             'catalogue_shortcode_php' => <<<PHP
-// Shortcode to display published ONI LMS courses on WordPress [oni_course_catalogue]
+// Shortcode to display published Edu Care courses on WordPress [edu_care_course_catalogue]
 function oni_lana_render_lms_courses() {
     \$response = wp_remote_get('{$lmsUrl}/api/v1/integrations/wordpress/catalogue');
     if (is_wp_error(\$response)) {
@@ -320,7 +320,7 @@ function oni_lana_render_lms_courses() {
     echo '</div>';
     return ob_get_clean();
 }
-add_shortcode('oni_course_catalogue', 'oni_lana_render_lms_courses');
+add_shortcode('edu_care_course_catalogue', 'oni_lana_render_lms_courses');
 PHP,
         ];
     }
