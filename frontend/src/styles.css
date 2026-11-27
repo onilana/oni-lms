@@ -4952,6 +4952,23 @@ body {
   background: #ffffff;
 }
 
+.excel-table-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-top: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.excel-table-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .excel-lms-table {
   width: 100%;
   border-collapse: collapse;

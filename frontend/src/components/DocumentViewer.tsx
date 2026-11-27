@@ -16,6 +16,8 @@ import {
   Table
 } from 'lucide-react';
 
+const SPREADSHEET_PAGE_SIZE = 100;
+
 interface DocumentViewerProps {
   type: 'video' | 'pdf' | 'doc' | 'word' | 'excel' | 'spreadsheet' | 'link' | 'embed' | 'text';
   url?: string | null;
@@ -44,6 +46,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const [sheetData, setSheetData] = useState<any[][]>([]);
   const [workbookRef, setWorkbookRef] = useState<XLSX.WorkBook | null>(null);
   const [tableSearch, setTableSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Fallback iframe for Word / Office documents
   const [useIframeFallback, setUseIframeFallback] = useState(false);
@@ -104,6 +107,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
 
   // Load and parse Excel spreadsheet
   useEffect(() => {
+    setCurrentPage(1);
     if (!isExcel || !effectiveUrl) {
       setSheetNames([]);
       setSheetData([]);
@@ -151,6 +155,7 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
   const handleSelectSheet = (name: string) => {
     if (!workbookRef) return;
     setActiveSheet(name);
+    setCurrentPage(1);
     const data: any[][] = XLSX.utils.sheet_to_json(workbookRef.Sheets[name], { header: 1 });
     setSheetData(data);
   };
@@ -187,6 +192,16 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
     if (!tableSearch) return true;
     return row.some((cell) => String(cell ?? '').toLowerCase().includes(tableSearch.toLowerCase()));
   });
+  const filteredDataRows = filteredRows.slice(1);
+  const pageCount = Math.max(1, Math.ceil(filteredDataRows.length / SPREADSHEET_PAGE_SIZE));
+  const visibleRows = filteredDataRows.slice(
+    (currentPage - 1) * SPREADSHEET_PAGE_SIZE,
+    currentPage * SPREADSHEET_PAGE_SIZE
+  );
+  const firstVisibleRow = filteredDataRows.length > 0
+    ? (currentPage - 1) * SPREADSHEET_PAGE_SIZE + 1
+    : 0;
+  const lastVisibleRow = Math.min(currentPage * SPREADSHEET_PAGE_SIZE, filteredDataRows.length);
 
   return (
     <div className={`lms-doc-viewer-wrapper ${fullscreen ? 'is-fullscreen' : ''}`}>
@@ -321,7 +336,10 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                   type="text"
                   placeholder="Search spreadsheet data..."
                   value={tableSearch}
-                  onChange={(e) => setTableSearch(e.target.value)}
+                  onChange={(e) => {
+                    setTableSearch(e.target.value);
+                    setCurrentPage(1);
+                  }}
                 />
               </div>
             </div>
@@ -339,9 +357,9 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredRows.slice(1).map((row, rIdx) => (
+                    {visibleRows.map((row, rIdx) => (
                       <tr key={rIdx}>
-                        <td className="row-num-cell">{rIdx + 1}</td>
+                        <td className="row-num-cell">{firstVisibleRow + rIdx}</td>
                         {(filteredRows[0] || []).map((_, cIdx) => (
                           <td key={cIdx}>{row[cIdx] !== undefined && row[cIdx] !== null ? String(row[cIdx]) : ''}</td>
                         ))}
@@ -349,6 +367,34 @@ export const DocumentViewer: React.FC<DocumentViewerProps> = ({
                     ))}
                   </tbody>
                 </table>
+                {filteredDataRows.length > SPREADSHEET_PAGE_SIZE && (
+                  <div className="excel-table-pagination">
+                    <span>
+                      Showing {firstVisibleRow}-{lastVisibleRow} of {filteredDataRows.length} rows
+                    </span>
+                    <div className="excel-table-pagination-controls">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setCurrentPage((page) => page - 1)}
+                        disabled={currentPage === 1}
+                      >
+                        Previous
+                      </button>
+                      <span>
+                        Page {currentPage} of {pageCount}
+                      </span>
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setCurrentPage((page) => page + 1)}
+                        disabled={currentPage === pageCount}
+                      >
+                        Next
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             ) : useIframeFallback ? (
               <iframe
