@@ -291,4 +291,135 @@ class RbacPolicyTest extends TestCase
         $this->assertDatabaseMissing('teacher_profiles', ['user_id' => $this->student->id]);
         $this->assertNotNull($this->student->fresh()->studentProfile->student_id_number);
     }
+
+    public function test_attendance_endpoints_block_students_and_unrelated_teachers(): void
+    {
+        $session = \App\Models\AttendanceSession::create([
+            'course_id' => $this->publishedCourse->id,
+            'instructor_id' => $this->admin->id,
+            'session_date' => now()->toDateString(),
+            'topic' => 'Lecture 1',
+            'status' => 'completed',
+        ]);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/courses/' . $this->publishedCourse->id . '/attendance/sessions')
+            ->assertStatus(403);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/attendance/sessions/' . $session->id)
+            ->assertStatus(403);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/courses/' . $this->publishedCourse->id . '/attendance/summary')
+            ->assertStatus(403);
+
+        $this->actingAs($this->otherTeacher, 'sanctum')
+            ->getJson('/api/v1/courses/' . $this->publishedCourse->id . '/attendance/summary')
+            ->assertStatus(403);
+    }
+
+    public function test_question_bank_blocks_students_and_unrelated_teachers(): void
+    {
+        $question = \App\Models\Question::create([
+            'course_id' => $this->publishedCourse->id,
+            'created_by' => $this->admin->id,
+            'type' => 'mcq',
+            'question_text' => 'What is Big-O of binary search?',
+            'options' => ['O(1)', 'O(log n)', 'O(n)', 'O(n^2)'],
+            'correct_answers' => ['O(log n)'],
+            'marks' => 2,
+        ]);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/questions?course_id=' . $this->publishedCourse->id)
+            ->assertStatus(403);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/questions/' . $question->id)
+            ->assertStatus(403);
+
+        $this->actingAs($this->otherTeacher, 'sanctum')
+            ->getJson('/api/v1/questions?course_id=' . $this->publishedCourse->id)
+            ->assertStatus(403);
+
+        $this->actingAs($this->otherTeacher, 'sanctum')
+            ->getJson('/api/v1/questions/' . $question->id)
+            ->assertStatus(403);
+    }
+
+    public function test_student_cannot_manipulate_enrolment_status_or_enrol_in_draft_course(): void
+    {
+        $academicSession = \App\Models\AcademicSession::create([
+            'name' => '2026-2027',
+            'start_date' => '2026-08-01',
+            'end_date' => '2027-05-31',
+            'is_current' => true,
+            'status' => 'active',
+        ]);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->postJson('/api/v1/courses/' . $this->publishedCourse->id . '/enroll', [
+                'academic_session_id' => $academicSession->id,
+                'status' => 'completed',
+            ])
+            ->assertStatus(403);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->postJson('/api/v1/courses/' . $this->draftCourse->id . '/enroll', [
+                'academic_session_id' => $academicSession->id,
+            ])
+            ->assertStatus(422);
+    }
+
+    public function test_must_change_password_blocks_protected_api_routes_until_changed(): void
+    {
+        $this->student->forceFill(['must_change_password' => true])->save();
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/courses')
+            ->assertStatus(403)
+            ->assertJsonPath('must_change_password', true);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->getJson('/api/v1/auth/me')
+            ->assertStatus(200);
+
+        $this->actingAs($this->student, 'sanctum')
+            ->postJson('/api/v1/auth/change-password', [
+                'current_password' => 'Secret123!',
+                'new_password' => 'NewSecret123!',
+                'new_password_confirmation' => 'NewSecret123!',
+            ])
+            ->assertStatus(200);
+
+        $this->actingAs($this->student->fresh(), 'sanctum')
+            ->getJson('/api/v1/courses')
+            ->assertStatus(200);
+    }
+
+    public function test_sso_rejects_inactive_accounts_even_with_valid_signature(): void
+    {
+        config(['wordpress.webhook_secret' => 'test-sso-secret-key-123456']);
+        $this->student->update(['status' => 'inactive']);
+
+        $claims = [
+            'iss' => rtrim((string) config('wordpress.url'), '/'),
+            'aud' => rtrim((string) config('app.url'), '/'),
+            'email' => $this->student->email,
+            'email_verified' => true,
+            'name' => $this->student->name,
+            'iat' => time(),
+            'exp' => time() + 300,
+            'nonce' => 'nonce-' . uniqid('', true),
+        ];
+        $payload = rtrim(strtr(base64_encode(json_encode($claims)), '+/', '-_'), '=');
+        $sig = hash_hmac('sha256', $payload, 'test-sso-secret-key-123456');
+
+        $this->postJson('/api/v1/integrations/wordpress/sso-handshake', [
+            'email' => $this->student->email,
+            'name' => $this->student->name,
+            'token' => $payload . '.' . $sig,
+        ])->assertStatus(403);
+    }
 }

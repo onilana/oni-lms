@@ -88,6 +88,8 @@ class WordPressIntegrationController
             return response()->json($result);
         } catch (\InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 401);
+        } catch (\RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 403);
         }
     }
 

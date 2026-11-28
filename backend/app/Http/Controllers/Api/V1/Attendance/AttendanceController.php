@@ -8,6 +8,7 @@ use App\Http\Resources\Attendance\AttendanceSessionResource;
 use App\Models\AttendanceRecord;
 use App\Models\AttendanceSession;
 use App\Models\Course;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,8 +16,33 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class AttendanceController
 {
+    private function canAccessCourseAttendance(?User $user, Course $course): bool
+    {
+        if (! $user) {
+            return false;
+        }
+
+        if ($user->isInstitutionAdmin()) {
+            return true;
+        }
+
+        if ($user->hasRole([Role::HOD, Role::DEPT_ADMIN])) {
+            return $course->department_id === $user->getAssignedDepartmentId();
+        }
+
+        if ($user->hasRole(Role::TEACHER)) {
+            return $course->isTaughtBy($user);
+        }
+
+        return $user->hasPermission('attendance.mark') && ! $user->hasRole(Role::STUDENT);
+    }
+
     public function index(Request $request, Course $course): AnonymousResourceCollection
     {
+        if (! $this->canAccessCourseAttendance($request->user(), $course)) {
+            abort(403, 'Unauthorized access to course attendance.');
+        }
+
         $sessions = $course->attendanceSessions()
             ->with(['records.student'])
             ->latest('session_date')
@@ -27,6 +53,10 @@ class AttendanceController
 
     public function show(Request $request, AttendanceSession $session): AttendanceSessionResource
     {
+        if (! $this->canAccessCourseAttendance($request->user(), $session->course)) {
+            abort(403, 'Unauthorized access to attendance session.');
+        }
+
         $session->load(['records.student', 'instructor']);
         return new AttendanceSessionResource($session);
     }
@@ -76,8 +106,7 @@ class AttendanceController
 
     public function destroy(Request $request, AttendanceSession $session): JsonResponse
     {
-        $user = $request->user();
-        if (!$session->course->isTaughtBy($user) && !$user->hasPermission('attendance.mark') && !$user->isSuperAdmin()) {
+        if (! $this->canAccessCourseAttendance($request->user(), $session->course)) {
             return response()->json(['message' => 'Forbidden'], 403);
         }
 
@@ -117,6 +146,10 @@ class AttendanceController
 
     public function courseSummary(Request $request, Course $course): JsonResponse
     {
+        if (! $this->canAccessCourseAttendance($request->user(), $course)) {
+            abort(403, 'Unauthorized access to course attendance summary.');
+        }
+
         $students = $course->enrolledStudents()
             ->wherePivot('status', 'enrolled')
             ->get();

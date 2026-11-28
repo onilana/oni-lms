@@ -53,7 +53,7 @@ Route::prefix('v1')->group(function (): void {
     });
 
     // Authenticated endpoints
-    Route::middleware('auth:sanctum')->group(function (): void {
+    Route::middleware(['auth:sanctum', 'password.changed'])->group(function (): void {
         // User profile & session
         Route::prefix('auth')->group(function (): void {
             Route::get('/me', [AuthController::class, 'me']);

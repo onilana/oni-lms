@@ -8,6 +8,7 @@ use App\Models\AcademicSession;
 use App\Models\Course;
 use App\Models\CourseEnrolment;
 use App\Models\Role;
+use App\Models\Semester;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -32,10 +33,42 @@ class CourseEnrolmentController
     public function enroll(EnrollStudentRequest $request, Course $course): JsonResponse
     {
         $validated = $request->validated();
-        $targetUserId = $validated['user_id'] ?? $request->user()->id;
+        $authUser = $request->user();
+        $targetUserId = $validated['user_id'] ?? $authUser->id;
+        $canManage = Gate::allows('manageEnrolments', $course);
+
+        // Students cannot manipulate their own enrolment status
+        if (! $canManage && isset($validated['status']) && $validated['status'] !== 'enrolled') {
+            abort(403, 'Students cannot set or modify their own enrolment status.');
+        }
+
+        // Self-enrolment is only permitted on published courses
+        if (! $canManage && $course->status !== 'published') {
+            return response()->json([
+                'message' => 'This course is not open for enrolment.',
+            ], 422);
+        }
+
+        $targetUser = User::findOrFail($targetUserId);
+        if ($targetUser->status !== 'active') {
+            return response()->json([
+                'message' => 'Only active user accounts can be enrolled.',
+            ], 422);
+        }
 
         // Ensure target user is not already enrolled for this session
         $academicSessionId = $validated['academic_session_id'];
+
+        if (! empty($validated['semester_id'])) {
+            $semesterValid = Semester::where('id', $validated['semester_id'])
+                ->where('academic_session_id', $academicSessionId)
+                ->exists();
+            if (! $semesterValid) {
+                return response()->json([
+                    'message' => 'The selected semester does not belong to the specified academic session.',
+                ], 422);
+            }
+        }
 
         $existing = CourseEnrolment::where('course_id', $course->id)
             ->where('user_id', $targetUserId)
@@ -54,7 +87,7 @@ class CourseEnrolmentController
             'user_id' => $targetUserId,
             'academic_session_id' => $academicSessionId,
             'semester_id' => $validated['semester_id'] ?? null,
-            'status' => $validated['status'] ?? 'enrolled',
+            'status' => $canManage ? ($validated['status'] ?? 'enrolled') : 'enrolled',
             'enrolled_at' => now(),
         ]);
 

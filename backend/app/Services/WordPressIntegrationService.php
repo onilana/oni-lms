@@ -181,9 +181,15 @@ class WordPressIntegrationService
 
         // Find or provision user only after cryptographic & claim verification
         $user = User::where('email', $claims['email'])->first();
+        if ($user && $user->status !== 'active') {
+            throw new \RuntimeException('Account is ' . $user->status . ' and cannot sign in via SSO.');
+        }
+
         if (!$user) {
+            $verifiedName = trim((string) ($claims['name'] ?? '')) ?: $name;
             $user = User::create([
-                'name' => $name,
+                'name' => $verifiedName,
+                'username' => User::generateUniqueUsername($claims['email']),
                 'email' => $claims['email'],
                 'password' => bcrypt(Str::random(32)), // Random secure password; user uses SSO
                 'status' => 'active',
